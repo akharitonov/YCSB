@@ -1,29 +1,6 @@
-/**
- * Copyright (c) 2012 YCSB contributors. All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you
- * may not use this file except in compliance with the License. You
- * may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
- * implied. See the License for the specific language governing
- * permissions and limitations under the License. See accompanying
- * LICENSE file.
- */
-
-/**
- * Redis client binding for YCSB.
- *
- * All YCSB records are mapped to a Redis *hash field*.  For scanning
- * operations, all keys are saved (by an arbitrary hash) in a sorted set.
- */
-
 package site.ycsb.db;
 
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import site.ycsb.ByteIterator;
 import site.ycsb.DB;
 import site.ycsb.DBException;
@@ -34,18 +11,17 @@ import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisCluster;
 import redis.clients.jedis.JedisCommands;
-import redis.clients.jedis.Protocol;
+import site.ycsb.db.config.RedisMDDEClientConfig;
+import site.ycsb.db.config.RedisMDDEClientNode;
 
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Properties;
-import java.util.Set;
-import java.util.Vector;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * YCSB binding for <a href="http://redis.io/">Redis</a> node in <a href="https://github.com/jcridev/mdde">MDDE</a>.
@@ -53,47 +29,75 @@ import java.util.Vector;
  * See {@code redis-mdde/README.md} for details.
  */
 public class RedisMDDEClient extends DB {
+  /**
+   * Pool of RedisDB connected nodes
+   */
+  private Map<String, JedisCommands> _nodesPool = new HashMap<>();
 
-  private JedisCommands jedis;
-
-  public static final String HOST_PROPERTY = "redis.host";
-  public static final String PORT_PROPERTY = "redis.port";
-  public static final String PASSWORD_PROPERTY = "redis.password";
-  public static final String CLUSTER_PROPERTY = "redis.cluster";
+  Random randomNodeGen = new Random();
+  /**
+   * Property flag containing path to the YAML config
+   */
+  private static final String CONFIG_PATH = "redis-mdde.config";
 
   public static final String INDEX_KEY = "_indices";
 
   public void init() throws DBException {
     Properties props = getProperties();
-    int port;
-
-    String portString = props.getProperty(PORT_PROPERTY);
-    if (portString != null) {
-      port = Integer.parseInt(portString);
-    } else {
-      port = Protocol.DEFAULT_PORT;
-    }
-    String host = props.getProperty(HOST_PROPERTY);
-
-    boolean clusterEnabled = Boolean.parseBoolean(props.getProperty(CLUSTER_PROPERTY));
-    if (clusterEnabled) {
-      Set<HostAndPort> jedisClusterNodes = new HashSet<>();
-      jedisClusterNodes.add(new HostAndPort(host, port));
-      jedis = new JedisCluster(jedisClusterNodes);
-    } else {
-      jedis = new Jedis(host, port);
-      ((Jedis) jedis).connect();
+    final String configPath = props.getProperty(CONFIG_PATH);
+    File configFile = new File(configPath);
+    if(!configFile.exists() || configFile.isDirectory()){
+      // Somehow inappropriate exception but the one imposed by the superclass
+      throw new DBException("Unable to find the configuration file provided " + configPath);
     }
 
-    String password = props.getProperty(PASSWORD_PROPERTY);
-    if (password != null) {
-      ((BasicCommands) jedis).auth(password);
+    StringBuilder contentBuilder = new StringBuilder();
+    try (Stream<String> stream = Files.lines( Paths.get(configPath), StandardCharsets.UTF_8))
+    {
+      stream.forEach(s -> contentBuilder.append(s).append("\n"));
+    }
+    catch (IOException e)
+    {
+      e.printStackTrace();
+    }
+    String configText = contentBuilder.toString();
+
+    final YAMLMapper mapper = new YAMLMapper();
+    RedisMDDEClientConfig config;
+    try {
+      config = mapper.readValue(configText, RedisMDDEClientConfig.class);
+    } catch (IOException e) {
+      throw new DBException("Unable to parse the config file: " + e.getMessage());
+    }
+
+    for (RedisMDDEClientNode node : config.getNodes()){
+      String host = node.getHost();
+      int port = node.getPort();
+      JedisCommands jedis = null;
+      if (node.getCluster()) {
+        Set<HostAndPort> jedisClusterNodes = new HashSet<>();
+        jedisClusterNodes.add(new HostAndPort(host, port));
+        jedis = new JedisCluster(jedisClusterNodes);
+      } else {
+        jedis = new Jedis(host, port);
+      }
+      _nodesPool.put(node.getNodeId(), jedis);
+      if (node.getPassword() != null) {
+        ((BasicCommands) jedis).auth(Arrays.toString(node.getPassword()));
+      }
+      ((Jedis)jedis).connect();
     }
   }
 
+  /**
+   * Close all connections to Redis Db instances in the pool
+   * @throws DBException
+   */
   public void cleanup() throws DBException {
     try {
-      ((Closeable) jedis).close();
+      for (JedisCommands jedis: _nodesPool.values()){
+        ((Closeable) jedis).close();
+      }
     } catch (IOException e) {
       throw new DBException("Closing connection failed.");
     }
@@ -112,30 +116,38 @@ public class RedisMDDEClient extends DB {
   // XXX jedis.select(int index) to switch to `table`
 
   @Override
-  public Status read(String table, String key, Set<String> fields,
-      Map<String, ByteIterator> result) {
-    if (fields == null) {
-      StringByteIterator.putAllAsByteIterators(result, jedis.hgetAll(key));
-    } else {
-      String[] fieldArray =
-          (String[]) fields.toArray(new String[fields.size()]);
-      List<String> values = jedis.hmget(key, fieldArray);
+  public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
 
-      Iterator<String> fieldIterator = fields.iterator();
-      Iterator<String> valueIterator = values.iterator();
+    _nodesPool.forEach((k,jedis) -> {
+      if (fields == null) {
+        StringByteIterator.putAllAsByteIterators(result, jedis.hgetAll(key));
+      } else {
+        String[] fieldArray = (String[]) fields.toArray(new String[fields.size()]);
+        List<String> values = jedis.hmget(key, fieldArray);
 
-      while (fieldIterator.hasNext() && valueIterator.hasNext()) {
-        result.put(fieldIterator.next(),
-            new StringByteIterator(valueIterator.next()));
+        Iterator<String> fieldIterator = fields.iterator();
+        Iterator<String> valueIterator = values.iterator();
+
+        while (fieldIterator.hasNext() && valueIterator.hasNext()) {
+          result.put(fieldIterator.next(),
+              new StringByteIterator(valueIterator.next()));
+        }
+        assert !fieldIterator.hasNext() && !valueIterator.hasNext();
       }
-      assert !fieldIterator.hasNext() && !valueIterator.hasNext();
-    }
+    });
+
     return result.isEmpty() ? Status.ERROR : Status.OK;
   }
 
+
   @Override
   public Status insert(String table, String key,
-      Map<String, ByteIterator> values) {
+                      Map<String, ByteIterator> values) {
+    // Randomly grabbing an instance from the pool of RedisDbs
+    // TODO: Refactor and \ or change logic
+    Object[] allJedis = _nodesPool.values().toArray();
+    JedisCommands jedis = (JedisCommands) allJedis[randomNodeGen.nextInt(allJedis.length)];
+
     if (jedis.hmset(key, StringByteIterator.getStringMap(values))
         .equals("OK")) {
       jedis.zadd(INDEX_KEY, hash(key), key);
@@ -146,31 +158,39 @@ public class RedisMDDEClient extends DB {
 
   @Override
   public Status delete(String table, String key) {
-    return jedis.del(key) == 0 && jedis.zrem(INDEX_KEY, key) == 0 ? Status.ERROR
-        : Status.OK;
+    HashMap<String, Status> result = new HashMap<>();
+    _nodesPool.forEach((k,jedis) ->{
+      result.put(k, jedis.del(key) == 0 && jedis.zrem(INDEX_KEY, key) == 0 ? Status.ERROR : Status.OK);
+    });
+
+    return result.containsValue(Status.OK) ? Status.OK : Status.ERROR;
   }
 
   @Override
-  public Status update(String table, String key,
-      Map<String, ByteIterator> values) {
-    return jedis.hmset(key, StringByteIterator.getStringMap(values))
-        .equals("OK") ? Status.OK : Status.ERROR;
+  public Status update(String table, String key, Map<String, ByteIterator> values) {
+    HashMap<String, Status> result = new HashMap<>();
+    _nodesPool.forEach((k,jedis) ->{
+      result.put(k, jedis.hmset(key, StringByteIterator.getStringMap(values)).equals("OK") ? Status.OK : Status.ERROR);
+    });
+
+    return result.containsValue(Status.OK) ? Status.OK : Status.ERROR;
   }
 
   @Override
-  public Status scan(String table, String startkey, int recordcount,
-      Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-    Set<String> keys = jedis.zrangeByScore(INDEX_KEY, hash(startkey),
-        Double.POSITIVE_INFINITY, 0, recordcount);
+  public Status scan(String table, String startKey, int recordCount,
+                      Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
+    for (JedisCommands jedis: _nodesPool.values()) {
+      Set<String> keys = jedis.zrangeByScore(INDEX_KEY, hash(startKey),
+          Double.POSITIVE_INFINITY, 0, recordCount);
 
-    HashMap<String, ByteIterator> values;
-    for (String key : keys) {
-      values = new HashMap<String, ByteIterator>();
-      read(table, key, fields, values);
-      result.add(values);
+      HashMap<String, ByteIterator> values;
+      for (String key : keys) {
+        values = new HashMap<String, ByteIterator>();
+        read(table, key, fields, values);
+        result.add(values);
+      }
     }
 
     return Status.OK;
   }
-
 }
