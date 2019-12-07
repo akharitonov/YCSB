@@ -211,6 +211,8 @@ LICENSE file.
     <module>tablestore</module>
     <!--<module>voldemort</module>-->
     <module>voltdb</module>
+    <!-- MDDE Extension -->
+    <module>redis-mdde</module>
   </modules>
 
   <build>
