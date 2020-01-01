@@ -16,7 +16,7 @@
  */
 
 /**
- * The YCSB binding for <a href="http://redis.io/">Redis</a>.
+ * The YCSB binding for <a href="https://github.com/jcridev/mdde/">MDDE-Redis</a>.
  */
 package site.ycsb.db;
 
