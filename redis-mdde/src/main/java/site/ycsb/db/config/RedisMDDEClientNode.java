@@ -6,129 +6,109 @@ import org.codehaus.jackson.annotate.JsonProperty;
 import org.codehaus.jackson.annotate.JsonSetter;
 
 /**
- * Configuration pointing to the Redis instance running in the network
+ * Configuration pointing to the Redis instance running in the network.
  */
 @JsonPropertyOrder({ RedisMDDEClientNode.ID_FIELD,
                       RedisMDDEClientNode.HOST_FIELD,
                       RedisMDDEClientNode.PORT_FIELD,
-                      RedisMDDEClientNode.USERNAME_FIELD,
                       RedisMDDEClientNode.PASSWORD_FIELD,
                       RedisMDDEClientNode.CLUSTER_FIELD })
 public class RedisMDDEClientNode {
   public static final String ID_FIELD = "id";
   public static final String PORT_FIELD = "port";
-  public static final String USERNAME_FIELD = "username";
   public static final String PASSWORD_FIELD = "password";
   public static final String HOST_FIELD = "host";
   public static final String CLUSTER_FIELD = "host";
 
-  private String _nodeId;
-  private String _host = null;
-  private Integer _port = 6379;
-  private char[] _username = null;
-  private char[] _password = null;
-  private Boolean _isCluster = false;
+  private String nodeId;
+  private String host = null;
+  private Integer port = 6379;
+  private char[] password = null;
+  private Boolean isCluster = false;
 
   /**
-   * Get ID of the node
-   * @return
+   * Get ID of the node.
+   * @return Redis node assigned Id within the MDDE registry.
    */
   @JsonGetter(RedisMDDEClientNode.ID_FIELD)
   public String getNodeId(){
-    return _nodeId;
+    return nodeId;
   }
 
   /**
-   * Set ID of the node
-   * @param nodeId
+   * Set ID of the node.
+   * @param nId Redis node assigned Id within the MDDE registry.
    */
   @JsonSetter(RedisMDDEClientNode.ID_FIELD)
-  public void setNodeId(String nodeId){
-    _nodeId = nodeId;
+  public void setNodeId(String nId){
+    this.nodeId = nId;
   }
 
   /**
-   * Get HOST name or the IP address of the Redis node
-   * @return
+   * Get HOST name or the IP address of the Redis node.
+   * @return Redis node host.
    */
   @JsonProperty(RedisMDDEClientNode.HOST_FIELD)
   public String getHost() {
-    return _host;
+    return host;
   }
 
   /**
-   * Set HOST name or the IP address of the Redis node
-   * @param _host
+   * Set HOST name or the IP address of the Redis node.
+   * @param redisHost Redis node host.
    */
   @JsonSetter(RedisMDDEClientNode.HOST_FIELD)
-  public void setHost(String _host) {
-    this._host = _host;
+  public void setHost(String redisHost) {
+    this.host = redisHost;
   }
 
   /**
-   * Get port of the Redis node
-   * @return
+   * Get port of the Redis node.
+   * @return Redis node port.
    */
   @JsonProperty(RedisMDDEClientNode.PORT_FIELD)
   public Integer getPort() {
-    return _port;
+    return port;
   }
 
   /**
-   * Set port of the Redis node
-   * @param _port
+   * Set port of the Redis node.
+   * @param redisPort Redis node port.
    */
   @JsonSetter(RedisMDDEClientNode.PORT_FIELD)
-  public void setPort(Integer _port) {
-    this._port = _port;
+  public void setPort(Integer redisPort) {
+    this.port = redisPort;
   }
 
   /**
-   * Get username of the Redis node
-   * @return
-   */
-  @JsonProperty(RedisMDDEClientNode.USERNAME_FIELD)
-  public char[] getUsername() {
-    return _username;
-  }
-
-  /**
-   * Set username of the Redis node if required
-   * @param _username
-   */
-  @JsonSetter(RedisMDDEClientNode.USERNAME_FIELD)
-  public void setUsername(char[] _username) {
-    this._username = _username;
-  }
-
-  /**
-   * Get password of the Redis node
-   * @return
+   * Get password of the Redis node.
+   * @return Redis node password.
    */
   @JsonProperty(RedisMDDEClientNode.PASSWORD_FIELD)
   public char[] getPassword() {
-    return _password;
+    return password;
   }
 
   /**
-   * Set password of the Redis node if required
-   * @param _password
+   * Set password of the Redis node if required.
+   * @param redisPassword Redis node password.
    */
   @JsonSetter(RedisMDDEClientNode.PASSWORD_FIELD)
-  public void setPassword(char[] _password) {
-    this._password = _password;
+  public void setPassword(char[] redisPassword) {
+    this.password = redisPassword;
   }
 
   /**
-   * Determine if the node is a cluster node
-   * @return True - is cluster
+   * Determine if the node is a cluster node.
+   * @return True - is cluster.
    */
   @JsonProperty(RedisMDDEClientNode.CLUSTER_FIELD)
   public Boolean getCluster() {
-    return _isCluster;
+    return isCluster;
   }
+
   @JsonSetter(RedisMDDEClientNode.CLUSTER_FIELD)
   public void setCluster(Boolean cluster) {
-    this._isCluster = cluster;
+    this.isCluster = cluster;
   }
 }

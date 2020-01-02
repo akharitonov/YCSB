@@ -30,15 +30,15 @@ import java.util.stream.Stream;
  */
 public class RedisMDDEClient extends DB {
   /**
-   * Pool of RedisDB connected nodes
+   * Pool of RedisDB connected nodes.
    */
-  private Map<String, JedisCommands> _nodesPool = new HashMap<>();
+  private Map<String, JedisCommands> nodesPool = new HashMap<>();
 
-  Random randomNodeGen = new Random();
+  private Random randomNodeGen = new Random();
   /**
-   * Property flag containing path to the YAML config
+   * Property flag containing path to the YAML config.
    */
-  private static final String CONFIG_PATH = "redis-mdde.config";
+  private static final String CONFIG_PATH = "redismdde.configfile";
 
   public static final String INDEX_KEY = "_indices";
 
@@ -52,12 +52,10 @@ public class RedisMDDEClient extends DB {
     }
 
     StringBuilder contentBuilder = new StringBuilder();
-    try (Stream<String> stream = Files.lines( Paths.get(configPath), StandardCharsets.UTF_8))
-    {
+    try (Stream<String> stream = Files.lines(Paths.get(configPath), StandardCharsets.UTF_8)){
       stream.forEach(s -> contentBuilder.append(s).append("\n"));
     }
-    catch (IOException e)
-    {
+    catch (IOException e){
       e.printStackTrace();
     }
     String configText = contentBuilder.toString();
@@ -81,7 +79,7 @@ public class RedisMDDEClient extends DB {
       } else {
         jedis = new Jedis(host, port);
       }
-      _nodesPool.put(node.getNodeId(), jedis);
+      nodesPool.put(node.getNodeId(), jedis);
       if (node.getPassword() != null) {
         ((BasicCommands) jedis).auth(Arrays.toString(node.getPassword()));
       }
@@ -90,12 +88,12 @@ public class RedisMDDEClient extends DB {
   }
 
   /**
-   * Close all connections to Redis Db instances in the pool
+   * Close all connections to Redis Db instances in the pool.
    * @throws DBException
    */
   public void cleanup() throws DBException {
     try {
-      for (JedisCommands jedis: _nodesPool.values()){
+      for (JedisCommands jedis: nodesPool.values()){
         ((Closeable) jedis).close();
       }
     } catch (IOException e) {
@@ -117,24 +115,22 @@ public class RedisMDDEClient extends DB {
 
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
+    nodesPool.forEach((k, jedis) -> {
+        if (fields == null) {
+          StringByteIterator.putAllAsByteIterators(result, jedis.hgetAll(key));
+        } else {
+          String[] fieldArray = (String[]) fields.toArray(new String[fields.size()]);
+          List<String> values = jedis.hmget(key, fieldArray);
+          Iterator<String> fieldIterator = fields.iterator();
+          Iterator<String> valueIterator = values.iterator();
 
-    _nodesPool.forEach((k,jedis) -> {
-      if (fields == null) {
-        StringByteIterator.putAllAsByteIterators(result, jedis.hgetAll(key));
-      } else {
-        String[] fieldArray = (String[]) fields.toArray(new String[fields.size()]);
-        List<String> values = jedis.hmget(key, fieldArray);
-
-        Iterator<String> fieldIterator = fields.iterator();
-        Iterator<String> valueIterator = values.iterator();
-
-        while (fieldIterator.hasNext() && valueIterator.hasNext()) {
-          result.put(fieldIterator.next(),
-              new StringByteIterator(valueIterator.next()));
+          while (fieldIterator.hasNext() && valueIterator.hasNext()) {
+            result.put(fieldIterator.next(),
+                new StringByteIterator(valueIterator.next()));
+          }
+          assert !fieldIterator.hasNext() && !valueIterator.hasNext();
         }
-        assert !fieldIterator.hasNext() && !valueIterator.hasNext();
-      }
-    });
+      });
 
     return result.isEmpty() ? Status.ERROR : Status.OK;
   }
@@ -145,7 +141,7 @@ public class RedisMDDEClient extends DB {
                       Map<String, ByteIterator> values) {
     // Randomly grabbing an instance from the pool of RedisDbs
     // TODO: Refactor and \ or change logic
-    Object[] allJedis = _nodesPool.values().toArray();
+    Object[] allJedis = nodesPool.values().toArray();
     JedisCommands jedis = (JedisCommands) allJedis[randomNodeGen.nextInt(allJedis.length)];
 
     if (jedis.hmset(key, StringByteIterator.getStringMap(values))
@@ -159,9 +155,9 @@ public class RedisMDDEClient extends DB {
   @Override
   public Status delete(String table, String key) {
     HashMap<String, Status> result = new HashMap<>();
-    _nodesPool.forEach((k,jedis) ->{
-      result.put(k, jedis.del(key) == 0 && jedis.zrem(INDEX_KEY, key) == 0 ? Status.ERROR : Status.OK);
-    });
+    nodesPool.forEach((k, jedis) ->{
+        result.put(k, jedis.del(key) == 0 && jedis.zrem(INDEX_KEY, key) == 0 ? Status.ERROR : Status.OK);
+      });
 
     return result.containsValue(Status.OK) ? Status.OK : Status.ERROR;
   }
@@ -169,9 +165,12 @@ public class RedisMDDEClient extends DB {
   @Override
   public Status update(String table, String key, Map<String, ByteIterator> values) {
     HashMap<String, Status> result = new HashMap<>();
-    _nodesPool.forEach((k,jedis) ->{
-      result.put(k, jedis.hmset(key, StringByteIterator.getStringMap(values)).equals("OK") ? Status.OK : Status.ERROR);
-    });
+    nodesPool.forEach((k, jedis) ->{
+        result.put(k, jedis.hmset(key,
+            StringByteIterator.getStringMap(values)).equals("OK")
+            ? Status.OK
+            : Status.ERROR);
+      });
 
     return result.containsValue(Status.OK) ? Status.OK : Status.ERROR;
   }
@@ -179,7 +178,7 @@ public class RedisMDDEClient extends DB {
   @Override
   public Status scan(String table, String startKey, int recordCount,
                       Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-    for (JedisCommands jedis: _nodesPool.values()) {
+    for (JedisCommands jedis: nodesPool.values()) {
       Set<String> keys = jedis.zrangeByScore(INDEX_KEY, hash(startKey),
           Double.POSITIVE_INFINITY, 0, recordCount);
 
@@ -190,7 +189,6 @@ public class RedisMDDEClient extends DB {
         result.add(values);
       }
     }
-
     return Status.OK;
   }
 }

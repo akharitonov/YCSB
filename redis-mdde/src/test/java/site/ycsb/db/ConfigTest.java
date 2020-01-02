@@ -1,8 +1,6 @@
 package site.ycsb.db;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import site.ycsb.db.config.RedisMDDEClientNode;
 import site.ycsb.db.config.RedisMDDEClientConfig;
 
 import org.junit.Test;
@@ -22,15 +20,14 @@ public class ConfigTest {
         "- id: \"TestNode 1\"\n" +
           "  host: \"localhost\"\n" +
           "  port: 6379\n" +
-          "  username: null\n" +
           "  password: null\n"+
           "  cluster: false\n"+
         "- id: \"TestNode 2\"\n" +
           "  host: \"192.168.0.2\"\n" +
           "  port: 6379\n" +
-          "  username: \"somme_username\"\n" +
           "  password: \"some_password\"\n"+
           "  cluster: false\n";
+    System.out.println(sampleYAMLConfig);
     final YAMLMapper mapper = new YAMLMapper();
     RedisMDDEClientConfig config = null;
     try {

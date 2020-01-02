@@ -8,23 +8,23 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * Client configuration containing information needed to connect to any
+ * Client configuration containing information needed to connect to any.
  */
 public class RedisMDDEClientConfig {
   @JsonIgnore
-  private List<RedisMDDEClientNode> _RedisMDDEClient_nodes;
+  private List<RedisMDDEClientNode> redisMDDEClientNodes;
 
   /**
-   * Redis Instances
-   * @return
+   * Redis Instances.
+   * @return Redis data nodes configurations.
    */
   @JsonGetter("nodes")
   public List<RedisMDDEClientNode> getNodes() {
-    return _RedisMDDEClient_nodes;
+    return redisMDDEClientNodes;
   }
 
-  public void setNodes(List<RedisMDDEClientNode> redisMDDEClientNodes){
-    _RedisMDDEClient_nodes = redisMDDEClientNodes;
+  public void setNodes(List<RedisMDDEClientNode> redisNodes){
+    redisMDDEClientNodes = redisNodes;
   }
 
   @Override

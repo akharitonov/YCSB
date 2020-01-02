@@ -1,0 +1,33 @@
+version: '3.7'
+services:
+  mdde_data_redis_1:
+    container_name: mdde_data_redis_1
+    restart: always
+    networks:
+      mdde_n:
+        ipv4_address: 172.22.0.21
+        aliases:
+          - mddednode1
+    image: redis:5
+    ports:
+      - "6479:6379"
+  mdde_data_redis_2:
+    container_name: mdde_data_redis_2
+    restart: always
+    networks:
+      mdde_n:
+        ipv4_address: 172.22.0.22
+        aliases:
+          - mddednode2
+    image: redis:5
+    ports:
+      - "6579:6379"
+networks:
+  mdde_n:
+    name: mdde_n
+    driver: bridge
+    internal: false
+    ipam:
+      config:
+        - subnet: "172.22.0.0/16"
+

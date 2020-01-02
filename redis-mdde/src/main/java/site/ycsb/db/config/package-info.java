@@ -1,5 +1,5 @@
 /**
  * The YCSB binding for <a href="https://github.com/jcridev/mdde/">MDDE-Redis</a>.
  */
-package site.ycsb.db;
+package site.ycsb.db.config;
 
