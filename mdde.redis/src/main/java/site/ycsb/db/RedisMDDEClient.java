@@ -1,20 +1,17 @@
 package site.ycsb.db;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import redis.clients.jedis.*;
 import site.ycsb.ByteIterator;
 import site.ycsb.DB;
 import site.ycsb.DBException;
 import site.ycsb.Status;
 import site.ycsb.StringByteIterator;
-import redis.clients.jedis.BasicCommands;
-import redis.clients.jedis.HostAndPort;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisCluster;
-import redis.clients.jedis.JedisCommands;
 import site.ycsb.db.config.RedisMDDEClientConfig;
 import site.ycsb.db.config.RedisMDDEClientNode;
 
-import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -32,14 +29,16 @@ public class RedisMDDEClient extends DB {
   /**
    * Pool of RedisDB connected nodes.
    */
-  private Map<String, JedisCommands> nodesPool = new HashMap<>();
+  private Map<String, JedisPool> nodesPool = new HashMap<>();
+
+  private boolean verbose = false;
 
   private Random randomNodeGen = new Random();
   /**
    * Property flag containing path to the YAML config.
    */
-  private static final String CONFIG_PATH = "redismdde.configfile";
-
+  private static final String CONFIG_PATH = "mdde.redis.configfile";
+  private static final String VERBOSE_P = "verbose";
   public static final String INDEX_KEY = "_indices";
 
   public void init() throws DBException {
@@ -51,16 +50,29 @@ public class RedisMDDEClient extends DB {
       throw new DBException("Unable to find the configuration file provided " + configPath);
     }
 
+    if ((getProperties().getProperty(VERBOSE_P) != null) &&
+        (getProperties().getProperty(VERBOSE_P).compareTo("true") == 0)) {
+      verbose = true;
+    }
+
     StringBuilder contentBuilder = new StringBuilder();
     try (Stream<String> stream = Files.lines(Paths.get(configPath), StandardCharsets.UTF_8)){
       stream.forEach(s -> contentBuilder.append(s).append("\n"));
     }
     catch (IOException e){
-      e.printStackTrace();
+      throw new DBException("Failed to read the config file", e);
     }
     String configText = contentBuilder.toString();
+    initWithTextConfig(configText);
 
-    final YAMLMapper mapper = new YAMLMapper();
+    if(nodesPool.size() == 0) {
+      throw new DBException("Data nodes are't specified.");
+    }
+  }
+
+  public void initWithTextConfig(String configText) throws DBException{
+    final ObjectMapper mapper = new YAMLMapper()
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     RedisMDDEClientConfig config;
     try {
       config = mapper.readValue(configText, RedisMDDEClientConfig.class);
@@ -71,33 +83,36 @@ public class RedisMDDEClient extends DB {
     for (RedisMDDEClientNode node : config.getNodes()){
       String host = node.getHost();
       int port = node.getPort();
-      JedisCommands jedis = null;
-      if (node.getCluster()) {
-        Set<HostAndPort> jedisClusterNodes = new HashSet<>();
-        jedisClusterNodes.add(new HostAndPort(host, port));
-        jedis = new JedisCluster(jedisClusterNodes);
-      } else {
-        jedis = new Jedis(host, port);
-      }
-      nodesPool.put(node.getNodeId(), jedis);
+
+      JedisPoolConfig configPool = new JedisPoolConfig();
+      JedisPool nodeCPool = null;
       if (node.getPassword() != null) {
-        ((BasicCommands) jedis).auth(Arrays.toString(node.getPassword()));
+        nodeCPool = new JedisPool(configPool, host, port,  2000, new String(node.getPassword()));
+      } else {
+        nodeCPool = new JedisPool(configPool, host, port,  2000);
       }
-      ((Jedis)jedis).connect();
+      nodesPool.put(node.getNodeId(), nodeCPool);
     }
   }
 
   /**
    * Close all connections to Redis Db instances in the pool.
-   * @throws DBException
+   * @throws DBException DBExceptionMDDEAggregate.
    */
   public void cleanup() throws DBException {
-    try {
-      for (JedisCommands jedis: nodesPool.values()){
-        ((Closeable) jedis).close();
+    List<Throwable> errors = null;
+    for (String poolId : nodesPool.keySet()){
+      try {
+        nodesPool.get(poolId).close();
+      } catch (Exception e) {
+        if(errors == null){
+          errors = new LinkedList<>();
+        }
+        errors.add(new DBException(String.format("Closing connection failed for node %s.", poolId)));
       }
-    } catch (IOException e) {
-      throw new DBException("Closing connection failed.");
+    }
+    if(errors != null){
+      throw new DBExceptionMDDEAggregate(errors);
     }
   }
 
@@ -115,73 +130,108 @@ public class RedisMDDEClient extends DB {
 
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
-    nodesPool.forEach((k, jedis) -> {
+    for (Map.Entry<String, JedisPool> entry : nodesPool.entrySet()) {
+      JedisPool pool = entry.getValue();
+      try (Jedis jedis = pool.getResource()) {
         if (fields == null) {
           StringByteIterator.putAllAsByteIterators(result, jedis.hgetAll(key));
         } else {
-          String[] fieldArray = (String[]) fields.toArray(new String[fields.size()]);
+          String[] fieldArray = fields.toArray(new String[fields.size()]);
           List<String> values = jedis.hmget(key, fieldArray);
-          Iterator<String> fieldIterator = fields.iterator();
-          Iterator<String> valueIterator = values.iterator();
 
-          while (fieldIterator.hasNext() && valueIterator.hasNext()) {
-            result.put(fieldIterator.next(),
-                new StringByteIterator(valueIterator.next()));
+          for(int i = 0; i < fieldArray.length; i++){
+            String iField = fieldArray[i];
+            String iVal = values.get(i);
+            if(iVal != null) {
+              result.put(iField, new StringByteIterator(iVal));
+            }
           }
-          assert !fieldIterator.hasNext() && !valueIterator.hasNext();
         }
-      });
+      }
+    }
 
-    return result.isEmpty() ? Status.ERROR : Status.OK;
+    return result.isEmpty() ? Status.NOT_FOUND : Status.OK;
   }
 
 
   @Override
-  public Status insert(String table, String key,
-                      Map<String, ByteIterator> values) {
+  public Status insert(String table, String key, Map<String, ByteIterator> values) {
     // Randomly grabbing an instance from the pool of RedisDbs
     // TODO: Refactor and \ or change logic
-    Object[] allJedis = nodesPool.values().toArray();
-    JedisCommands jedis = (JedisCommands) allJedis[randomNodeGen.nextInt(allJedis.length)];
-
-    if (jedis.hmset(key, StringByteIterator.getStringMap(values))
-        .equals("OK")) {
-      jedis.zadd(INDEX_KEY, hash(key), key);
-      return Status.OK;
+    Object[] allJedisPools = nodesPool.values().toArray();
+    JedisPool randJedisPool = (JedisPool) allJedisPools[randomNodeGen.nextInt(allJedisPools.length)];
+    try(Jedis jedis = randJedisPool.getResource()) {
+      Map<String, String> strValuesMap = StringByteIterator.getStringMap(values);
+      if(verbose){
+        System.out.println(String.format("Inserting key %s, num values: %d", key, values.size()));
+      }
+      long nSetFields = jedis.hset(key, strValuesMap);
+      if (nSetFields == values.size()) {
+        jedis.zadd(INDEX_KEY, hash(key), key);
+        return Status.OK;
+      } else {
+        return Status.ERROR;
+      }
     }
-    return Status.ERROR;
   }
 
   @Override
   public Status delete(String table, String key) {
-    HashMap<String, Status> result = new HashMap<>();
-    nodesPool.forEach((k, jedis) ->{
-        result.put(k, jedis.del(key) == 0 && jedis.zrem(INDEX_KEY, key) == 0 ? Status.ERROR : Status.OK);
-      });
+    Status result = Status.ERROR;
+    for (Map.Entry<String, JedisPool> entry : nodesPool.entrySet()) {
+      JedisPool jedisPool = entry.getValue();
+      try (Jedis jedis = jedisPool.getResource()) {
+        jedis.watch(key);
+        Transaction t = jedis.multi();
+        Response<Long> removedKeys = t.del(key);
+        Response<Long> removedIndices = t.zrem(INDEX_KEY, key);
+        t.exec();
 
-    return result.containsValue(Status.OK) ? Status.OK : Status.ERROR;
+        if (removedKeys.get() > 0 && removedIndices.get() > 0) {
+          result = Status.OK;
+          break;
+        }
+      }
+    }
+
+    return result;
   }
 
   @Override
   public Status update(String table, String key, Map<String, ByteIterator> values) {
-    HashMap<String, Status> result = new HashMap<>();
-    nodesPool.forEach((k, jedis) ->{
-        result.put(k, jedis.hmset(key,
-            StringByteIterator.getStringMap(values)).equals("OK")
-            ? Status.OK
-            : Status.ERROR);
-      });
-
-    return result.containsValue(Status.OK) ? Status.OK : Status.ERROR;
+    for (Map.Entry<String, JedisPool> entry : nodesPool.entrySet()) {
+      JedisPool jedisPool = entry.getValue();
+      try (Jedis jedis = jedisPool.getResource()) {
+        boolean existsInTheNode = jedis.exists(key);
+        if (!existsInTheNode) {
+          continue;
+        }
+        Map<String, String> stringValues = StringByteIterator.getStringMap(values);
+        long nSetValues = jedis.hset(key, stringValues);
+        if(verbose) {
+          System.out.println(
+              String.format("UPDATE: set for key %S. Added fields %d, supplied values %d",
+                  key, nSetValues, values.size()));
+        }
+        return Status.OK;
+      }
+    }
+    if(verbose) {
+      String notFoundKey = String.format("UPDATE: Failed to find the key: %S", key);
+      System.out.println(notFoundKey);
+    }
+    return Status.NOT_FOUND;
   }
 
   @Override
   public Status scan(String table, String startKey, int recordCount,
                       Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-    for (JedisCommands jedis: nodesPool.values()) {
-      Set<String> keys = jedis.zrangeByScore(INDEX_KEY, hash(startKey),
-          Double.POSITIVE_INFINITY, 0, recordCount);
-
+    for (JedisPool jedisPool: nodesPool.values()) {
+      Set<String> keys = null;
+      try(Jedis jedis = jedisPool.getResource()) {
+        keys = jedis.zrangeByScore(INDEX_KEY, hash(startKey),
+            Double.POSITIVE_INFINITY, 0, recordCount);
+      }
       HashMap<String, ByteIterator> values;
       for (String key : keys) {
         values = new HashMap<String, ByteIterator>();
@@ -190,5 +240,31 @@ public class RedisMDDEClient extends DB {
       }
     }
     return Status.OK;
+  }
+
+  /**
+   * Flush all of the keys from all of the nodes.
+   * @param andClose If True, also close the connection pools.
+   * @throws DBExceptionMDDEAggregate DBExceptionMDDEAggregate.
+   */
+  public void flush(boolean andClose) throws DBExceptionMDDEAggregate {
+    List<Throwable> errors = null;
+    for (String poolId : nodesPool.keySet()){
+      try {
+        JedisPool currentPool = nodesPool.get(poolId);
+        currentPool.getResource().flushAll();
+        if(andClose) {
+          currentPool.close();
+        }
+      } catch (Exception e) {
+        if(errors == null){
+          errors = new LinkedList<>();
+        }
+        errors.add(new DBException(String.format("Flushing failed connection failed for node %s.", poolId)));
+      }
+    }
+    if(errors != null){
+      throw new DBExceptionMDDEAggregate(errors);
+    }
   }
 }

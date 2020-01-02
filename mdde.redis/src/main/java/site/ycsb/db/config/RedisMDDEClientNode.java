@@ -11,20 +11,17 @@ import org.codehaus.jackson.annotate.JsonSetter;
 @JsonPropertyOrder({ RedisMDDEClientNode.ID_FIELD,
                       RedisMDDEClientNode.HOST_FIELD,
                       RedisMDDEClientNode.PORT_FIELD,
-                      RedisMDDEClientNode.PASSWORD_FIELD,
-                      RedisMDDEClientNode.CLUSTER_FIELD })
+                      RedisMDDEClientNode.PASSWORD_FIELD})
 public class RedisMDDEClientNode {
   public static final String ID_FIELD = "id";
   public static final String PORT_FIELD = "port";
   public static final String PASSWORD_FIELD = "password";
   public static final String HOST_FIELD = "host";
-  public static final String CLUSTER_FIELD = "host";
 
   private String nodeId;
   private String host = null;
   private Integer port = 6379;
   private char[] password = null;
-  private Boolean isCluster = false;
 
   /**
    * Get ID of the node.
@@ -96,19 +93,5 @@ public class RedisMDDEClientNode {
   @JsonSetter(RedisMDDEClientNode.PASSWORD_FIELD)
   public void setPassword(char[] redisPassword) {
     this.password = redisPassword;
-  }
-
-  /**
-   * Determine if the node is a cluster node.
-   * @return True - is cluster.
-   */
-  @JsonProperty(RedisMDDEClientNode.CLUSTER_FIELD)
-  public Boolean getCluster() {
-    return isCluster;
-  }
-
-  @JsonSetter(RedisMDDEClientNode.CLUSTER_FIELD)
-  public void setCluster(Boolean cluster) {
-    this.isCluster = cluster;
   }
 }

@@ -39,7 +39,7 @@ LICENSE file.
       <artifactId>core</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
+<!--    <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>accumulo1.9-binding</artifactId>
       <version>${project.version}</version>
@@ -203,12 +203,12 @@ LICENSE file.
       <groupId>site.ycsb</groupId>
       <artifactId>mongodb-binding</artifactId>
       <version>${project.version}</version>
-    </dependency>
+    </dependency> -->
     <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>mdde.redis-binding</artifactId>
       <version>${project.version}</version>
-    </dependency>
+    </dependency> <!--
     <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>nosqldb-binding</artifactId>
@@ -274,6 +274,7 @@ LICENSE file.
         <artifactId>tablestore-binding</artifactId>
         <version>${project.version}</version>
     </dependency>
+-->
 <!--
     <dependency>
       <groupId>site.ycsb</groupId>
@@ -281,12 +282,13 @@ LICENSE file.
       <version>${project.version}</version>
     </dependency>
 -->
+<!--
     <dependency>
        <groupId>site.ycsb</groupId>
        <artifactId>voltdb-binding</artifactId>
        <version>${project.version}</version>
      </dependency>
-
+-->
   </dependencies>
   <build>
     <plugins>

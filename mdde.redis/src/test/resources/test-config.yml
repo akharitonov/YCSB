@@ -4,9 +4,7 @@ nodes:
     host: "localhost"
     port: 6479
     password: null
-    cluster: false
   - id: "mddednode2"
     host: "localhost"
     port: 6579
     password: null
-    cluster: false

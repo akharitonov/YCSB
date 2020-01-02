@@ -111,7 +111,7 @@ LICENSE file.
     <maven.dependency.version>2.10</maven.dependency.version>
 
     <!-- datastore binding versions, lex sorted -->
-    <accumulo.1.9.version>1.9.3</accumulo.1.9.version>
+    <!--<accumulo.1.9.version>1.9.3</accumulo.1.9.version>
     <aerospike.version>3.1.2</aerospike.version>
     <arangodb.version>4.4.1</arangodb.version>
     <asynchbase.version>1.8.2</asynchbase.version>
@@ -136,9 +136,9 @@ LICENSE file.
     <ignite.version>2.7.0</ignite.version>
     <infinispan.version>7.2.2.Final</infinispan.version>
     <kudu.version>1.6.0</kudu.version>
-    <maprhbase.version>1.1.8-mapr-1710</maprhbase.version>
+    <maprhbase.version>1.1.8-mapr-1710</maprhbase.version>-->
     <!--<mapkeeper.version>1.0</mapkeeper.version>-->
-    <mongodb.version>3.8.0</mongodb.version>
+    <!--<mongodb.version>3.8.0</mongodb.version>
     <mongodb.async.version>2.0.1</mongodb.async.version>
     <openjpa.jdbc.version>2.1.1</openjpa.jdbc.version>
     <orientdb.version>2.2.37</orientdb.version>
@@ -153,7 +153,7 @@ LICENSE file.
     <thrift.version>0.8.0</thrift.version>
     <voldemort.version>0.81</voldemort.version>
     <tablestore.version>4.8.0</tablestore.version>
-    <voltdb.version>9.1.1</voltdb.version>
+    <voltdb.version>9.1.1</voltdb.version> -->
     <mdde.redis.version>2.9.0</mdde.redis.version>
   </properties>
 
@@ -165,7 +165,7 @@ LICENSE file.
     <!-- all the datastore bindings, lex sorted please -->
     <!-- MDDE Extension -->
     <module>mdde.redis</module>
-    <module>accumulo1.9</module>
+    <!--<module>accumulo1.9</module>
     <module>aerospike</module>
     <module>arangodb</module>
     <module>asynchbase</module>
@@ -193,9 +193,9 @@ LICENSE file.
     <module>ignite</module>
     <module>infinispan</module>
     <module>jdbc</module>
-    <module>kudu</module>
+    <module>kudu</module>-->
     <!--<module>mapkeeper</module>-->
-    <module>maprdb</module>
+    <!--<module>maprdb</module>
     <module>maprjsondb</module>
     <module>memcached</module>
     <module>mongodb</module>
@@ -211,9 +211,9 @@ LICENSE file.
     <module>solr</module>
     <module>solr6</module>
     <module>tarantool</module>
-    <module>tablestore</module>
+    <module>tablestore</module>-->
     <!--<module>voldemort</module>-->
-    <module>voltdb</module>
+    <!--<module>voltdb</module>-->
   </modules>
 
   <build>
