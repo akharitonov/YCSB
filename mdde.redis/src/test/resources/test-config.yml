@@ -1,4 +1,6 @@
 ---
+mddeHost: "localhost"
+mddePort: 4285
 nodes:
   - id: "mddednode1"
     host: "localhost"

@@ -4,11 +4,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import redis.clients.jedis.*;
-import site.ycsb.ByteIterator;
-import site.ycsb.DB;
-import site.ycsb.DBException;
-import site.ycsb.Status;
-import site.ycsb.StringByteIterator;
+import site.ycsb.*;
 import site.ycsb.db.config.RedisMDDEClientConfig;
 import site.ycsb.db.config.RedisMDDEClientNode;
 
@@ -18,22 +14,25 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Stream;
 
+
 /**
- * YCSB binding for <a href="http://redis.io/">Redis</a> node in <a href="https://github.com/jcridev/mdde">MDDE</a>.
- *
- * See {@code redis-mdde/README.md} for details.
+ * Base abstract class for implementing benchmarks  that work with multiple Redis instances but don't rely on the
+ * built-in Redis DB clusters. Instead we supply our own distribution control and retrieval logic.
  */
-public class RedisMDDEClient extends DB {
+public abstract class BaseRedisMultinodeClient extends DB {
   /**
    * Pool of RedisDB connected nodes.
    */
-  private Map<String, JedisPool> nodesPool = new HashMap<>();
+  protected Map<String, JedisPool> nodesPool = new HashMap<>();
+  /**
+   * Verbosity flag, use for triggering debug logs.
+   */
+  protected boolean verbose = false;
 
-  private boolean verbose = false;
-
-  private Random randomNodeGen = new Random();
   /**
    * Property flag containing path to the YAML config.
    */
@@ -70,6 +69,11 @@ public class RedisMDDEClient extends DB {
     }
   }
 
+  /**
+   * Initialized this instance with the textual configuration.
+   * @param configText String of the YAML config.
+   * @throws DBException Error of the configuration.
+   */
   public void initWithTextConfig(String configText) throws DBException{
     final ObjectMapper mapper = new YAMLMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -93,12 +97,22 @@ public class RedisMDDEClient extends DB {
       }
       nodesPool.put(node.getNodeId(), nodeCPool);
     }
+
+    // Do any additional implementation specific configuration
+    additionalConfiguration(config);
   }
+
+  /**
+   * Implement this method to do any additional configuration required for a specific implementation.
+   * @param parsedConfig Parsed RedisMDDEClientConfig, not null.
+   */
+  protected abstract void additionalConfiguration(RedisMDDEClientConfig parsedConfig) throws DBException;
 
   /**
    * Close all connections to Redis Db instances in the pool.
    * @throws DBException DBExceptionMDDEAggregate.
    */
+  @Override
   public void cleanup() throws DBException {
     List<Throwable> errors = null;
     for (String poolId : nodesPool.keySet()){
@@ -122,45 +136,45 @@ public class RedisMDDEClient extends DB {
    * scattered along the whole space of doubles. In a real world scenario one
    * would probably use the ASCII values of the keys.
    */
-  private double hash(String key) {
+  protected double hash(String key) {
     return key.hashCode();
   }
 
-  // XXX jedis.select(int index) to switch to `table`
-
   @Override
-  public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
-    for (Map.Entry<String, JedisPool> entry : nodesPool.entrySet()) {
-      JedisPool pool = entry.getValue();
-      try (Jedis jedis = pool.getResource()) {
-        if (fields == null) {
-          StringByteIterator.putAllAsByteIterators(result, jedis.hgetAll(key));
-        } else {
-          String[] fieldArray = fields.toArray(new String[fields.size()]);
-          List<String> values = jedis.hmget(key, fieldArray);
+  public abstract Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result);
 
-          for(int i = 0; i < fieldArray.length; i++){
-            String iField = fieldArray[i];
-            String iVal = values.get(i);
-            if(iVal != null) {
-              result.put(iField, new StringByteIterator(iVal));
-            }
-          }
+  /**
+   * Get a count of records on every node.
+   * @return Map NodeId : number of records.
+   * @throws DBException DBExceptionMDDEAggregate.
+   */
+  protected Map<String, Long> getDBCount() throws DBException {
+    List<Throwable> errors = new CopyOnWriteArrayList<>();
+    Map<String, Long> result = new ConcurrentHashMap<>();
+    result.keySet().addAll(nodesPool.keySet());
+    nodesPool.keySet().parallelStream().forEach(poolId -> {
+        try {
+          result.put(poolId, nodesPool.get(poolId).getResource().dbSize());
+          nodesPool.get(poolId).close();
+        } catch (Exception e) {
+          errors.add(new DBException(String.format("Failed fetching DBSIZE for node %s.", poolId)));
         }
-      }
+      });
+    if(errors.size() > 0){
+      throw new DBExceptionMDDEAggregate(errors);
     }
-
-    return result.isEmpty() ? Status.NOT_FOUND : Status.OK;
+    return result;
   }
 
+  /**
+   * Select the node for insertion.
+   * @return Jedis instance.
+   */
+  public abstract Jedis getNodeForInsertion() throws DBException;
 
   @Override
   public Status insert(String table, String key, Map<String, ByteIterator> values) {
-    // Randomly grabbing an instance from the pool of RedisDbs
-    // TODO: Refactor and \ or change logic
-    Object[] allJedisPools = nodesPool.values().toArray();
-    JedisPool randJedisPool = (JedisPool) allJedisPools[randomNodeGen.nextInt(allJedisPools.length)];
-    try(Jedis jedis = randJedisPool.getResource()) {
+    try(Jedis jedis = getNodeForInsertion()) {
       Map<String, String> strValuesMap = StringByteIterator.getStringMap(values);
       if(verbose){
         System.out.println(String.format("Inserting key %s, num values: %d", key, values.size()));
@@ -172,60 +186,26 @@ public class RedisMDDEClient extends DB {
       } else {
         return Status.ERROR;
       }
+    } catch (DBException e) {
+      if(verbose) {
+        System.err.println(e.getMessage());
+        if(e.getCause() != null){
+          System.err.println(e.getCause().getMessage());
+        }
+      }
+      return Status.ERROR;
     }
   }
 
   @Override
-  public Status delete(String table, String key) {
-    Status result = Status.ERROR;
-    for (Map.Entry<String, JedisPool> entry : nodesPool.entrySet()) {
-      JedisPool jedisPool = entry.getValue();
-      try (Jedis jedis = jedisPool.getResource()) {
-        jedis.watch(key);
-        Transaction t = jedis.multi();
-        Response<Long> removedKeys = t.del(key);
-        Response<Long> removedIndices = t.zrem(INDEX_KEY, key);
-        t.exec();
-
-        if (removedKeys.get() > 0 && removedIndices.get() > 0) {
-          result = Status.OK;
-          break;
-        }
-      }
-    }
-
-    return result;
-  }
+  public abstract Status delete(String table, String key);
 
   @Override
-  public Status update(String table, String key, Map<String, ByteIterator> values) {
-    for (Map.Entry<String, JedisPool> entry : nodesPool.entrySet()) {
-      JedisPool jedisPool = entry.getValue();
-      try (Jedis jedis = jedisPool.getResource()) {
-        boolean existsInTheNode = jedis.exists(key);
-        if (!existsInTheNode) {
-          continue;
-        }
-        Map<String, String> stringValues = StringByteIterator.getStringMap(values);
-        long nSetValues = jedis.hset(key, stringValues);
-        if(verbose) {
-          System.out.println(
-              String.format("UPDATE: set for key %S. Added fields %d, supplied values %d",
-                  key, nSetValues, values.size()));
-        }
-        return Status.OK;
-      }
-    }
-    if(verbose) {
-      String notFoundKey = String.format("UPDATE: Failed to find the key: %S", key);
-      System.out.println(notFoundKey);
-    }
-    return Status.NOT_FOUND;
-  }
+  public abstract Status update(String table, String key, Map<String, ByteIterator> values);
 
   @Override
   public Status scan(String table, String startKey, int recordCount,
-                      Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
+                     Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
     for (JedisPool jedisPool: nodesPool.values()) {
       Set<String> keys = null;
       try(Jedis jedis = jedisPool.getResource()) {

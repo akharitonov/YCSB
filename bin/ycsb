@@ -87,7 +87,7 @@ DATABASES = {
     "infinispan"   : "site.ycsb.db.InfinispanClient",
     "jdbc"         : "site.ycsb.db.JdbcDBClient",
     "kudu"         : "site.ycsb.db.KuduYCSBClient",
-    "mdde.redis"   : "site.ycsb.db.RedisMDDEClient",
+    "mdde.redis"   : "site.ycsb.db.RedisMultinodeMDDEClient",
     "memcached"    : "site.ycsb.db.MemcachedClient",
     "maprdb"       : "site.ycsb.db.mapr.MapRDBClient",
     "maprjsondb"   : "site.ycsb.db.mapr.MapRJSONDBClient",

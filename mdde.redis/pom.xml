@@ -30,6 +30,13 @@ LICENSE file.
   <packaging>jar</packaging>
 
   <dependencies>
+    <!-- MDDE -->
+    <dependency>
+      <groupId>dev.jcri.mdde.registry</groupId>
+      <artifactId>mdde-registry-shared</artifactId>
+      <version>0.1-SNAPSHOT</version>
+    </dependency>
+
     <dependency>
       <groupId>redis.clients</groupId>
       <artifactId>jedis</artifactId>

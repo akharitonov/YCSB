@@ -25,7 +25,7 @@ public class ClientBasicTest {
     String yamlTestConfig = new BufferedReader(new InputStreamReader(is)).lines()
         .parallel().collect(Collectors.joining("\n"));
 
-    RedisMDDEClient testClient = new RedisMDDEClient();
+    RedisMultinodeMDDEClient testClient = new RedisMultinodeMDDEClient();
     testClient.initWithTextConfig(yamlTestConfig);
     testClient.flush(false);
 
@@ -57,7 +57,7 @@ public class ClientBasicTest {
     String yamlTestConfig = new BufferedReader(new InputStreamReader(is)).lines()
         .parallel().collect(Collectors.joining("\n"));
 
-    RedisMDDEClient testClient = new RedisMDDEClient();
+    RedisMultinodeMDDEClient testClient = new RedisMultinodeMDDEClient();
     testClient.initWithTextConfig(yamlTestConfig);
     testClient.flush(false);
 

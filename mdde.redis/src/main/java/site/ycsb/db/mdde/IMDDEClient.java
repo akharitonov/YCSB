@@ -1,5 +1,9 @@
 package site.ycsb.db.mdde;
 
+import dev.jcri.mdde.registry.shared.commands.containers.CommandResultContainer;
+import dev.jcri.mdde.registry.shared.commands.containers.args.WriteArgsDeleteTupleContainer;
+import dev.jcri.mdde.registry.shared.commands.containers.args.WriteArgsInsertContainer;
+
 import java.io.IOException;
 
 /**
@@ -12,4 +16,18 @@ public interface IMDDEClient extends AutoCloseable {
    * @return JSON response.
    */
   String sendCommand(String command) throws IOException;
+
+  /**
+   * Insert tuple into the registry
+   * @param arguments
+   * @return
+   */
+  CommandResultContainer<String> InsertTuple(WriteArgsInsertContainer arguments);
+
+  /**
+   * Delete tuple from the registry
+   * @param arguments
+   * @return
+   */
+  CommandResultContainer<String> DeleteTuple(WriteArgsDeleteTupleContainer arguments);
 }

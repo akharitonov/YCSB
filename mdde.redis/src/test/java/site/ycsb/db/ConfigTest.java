@@ -16,17 +16,17 @@ public class ConfigTest {
   public void testDeserializationSerialization() {
     final String sampleYAMLConfig =
         "---\n" +
+        "mddeHost: \"localhost\"\n" +
+        "mddePort: 4285\n" +
         "nodes:\n" +
-        "- id: \"TestNode 1\"\n" +
-          "  host: \"localhost\"\n" +
-          "  port: 6379\n" +
-          "  password: null\n"+
-          "  cluster: false\n"+
-        "- id: \"TestNode 2\"\n" +
-          "  host: \"192.168.0.2\"\n" +
-          "  port: 6379\n" +
-          "  password: \"some_password\"\n"+
-          "  cluster: false\n";
+        "  - id: \"mddednode1\"\n" +
+        "    host: \"localhost\"\n" +
+        "    port: 6479\n" +
+        "    password: null\n" +
+        "  - id: \"mddednode2\"\n" +
+        "    host: \"localhost\"\n" +
+        "    port: 6579\n" +
+        "    password: null\n";
     System.out.println(sampleYAMLConfig);
     final YAMLMapper mapper = new YAMLMapper();
     RedisMDDEClientConfig config = null;
