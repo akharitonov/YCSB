@@ -1,5 +1,9 @@
 package site.ycsb.db.mdde;
 
+import dev.jcri.mdde.registry.shared.commands.containers.CommandResultContainer;
+import dev.jcri.mdde.registry.shared.commands.containers.args.WriteArgsDeleteTupleContainer;
+import dev.jcri.mdde.registry.shared.commands.containers.args.WriteArgsInsertContainer;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -58,6 +62,16 @@ public class MDDEClientTCP implements IMDDEClient {
       }
     }
     return new String(responsePayload, StandardCharsets.UTF_8);
+  }
+
+  @Override
+  public CommandResultContainer<String> insertTuple(WriteArgsInsertContainer arguments) {
+    return null;
+  }
+
+  @Override
+  public CommandResultContainer<String> deleteTuple(WriteArgsDeleteTupleContainer arguments) {
+    return null;
   }
 
   @Override

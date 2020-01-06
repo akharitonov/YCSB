@@ -50,37 +50,4 @@ public class ClientBasicTest {
     result.clear();
   }
 
-  @Test
-  public void writeReadDeleteMassParallel() throws DBException {
-    Properties props = new Properties();
-    InputStream is = ClientBasicTest.class.getResourceAsStream("/test-config.yml");
-    String yamlTestConfig = new BufferedReader(new InputStreamReader(is)).lines()
-        .parallel().collect(Collectors.joining("\n"));
-
-    RedisMultinodeMDDEClient testClient = new RedisMultinodeMDDEClient();
-    testClient.initWithTextConfig(yamlTestConfig);
-    testClient.flush(false);
-
-    String key = "k_1";
-    String field = "f_1";
-    String val = "test_value_1";
-    Map<String, ByteIterator> values = new HashMap<String, ByteIterator>(){
-      {put(field, new StringByteIterator(val));}
-    };
-
-    Status insertResult = testClient.insert(null, key, values);
-    assertEquals(Status.OK, insertResult);
-
-    Map<String, ByteIterator> result = new HashMap<String, ByteIterator>(); //
-    Status readResult = testClient.read(null, key, values.keySet(), result);
-    assertEquals(Status.OK, readResult);
-    assertEquals(1, result.size());
-    assertEquals(val, result.get(field).toString());
-
-    Status deleteResult = testClient.delete(null, key);
-    assertEquals(Status.OK, deleteResult);
-    result.clear();
-
-
-  }
 }

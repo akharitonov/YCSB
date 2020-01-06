@@ -18,16 +18,16 @@ public interface IMDDEClient extends AutoCloseable {
   String sendCommand(String command) throws IOException;
 
   /**
-   * Insert tuple into the registry
+   * Insert tuple into the registry.
    * @param arguments
    * @return
    */
-  CommandResultContainer<String> InsertTuple(WriteArgsInsertContainer arguments);
+  CommandResultContainer<String> insertTuple(WriteArgsInsertContainer arguments);
 
   /**
-   * Delete tuple from the registry
+   * Delete tuple from the registry.
    * @param arguments
    * @return
    */
-  CommandResultContainer<String> DeleteTuple(WriteArgsDeleteTupleContainer arguments);
+  CommandResultContainer<String> deleteTuple(WriteArgsDeleteTupleContainer arguments);
 }

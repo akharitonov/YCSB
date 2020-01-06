@@ -1,5 +1,6 @@
 package site.ycsb.db;
 
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.Response;
@@ -8,7 +9,6 @@ import site.ycsb.ByteIterator;
 import site.ycsb.DBException;
 import site.ycsb.Status;
 import site.ycsb.StringByteIterator;
-import site.ycsb.db.config.RedisMDDEClientConfig;
 
 import java.util.List;
 import java.util.Map;
@@ -24,7 +24,7 @@ public class RedisMultinodeStandaloneClient extends BaseRedisMultinodeClient {
   private Random randomNodeGen = new Random();
 
   @Override
-  protected void additionalConfiguration(RedisMDDEClientConfig parsedConfig) throws DBException {
+  protected void additionalConfiguration(MDDEClientConfiguration parsedConfig) throws DBException {
     // No additional configuration is needed
   }
 

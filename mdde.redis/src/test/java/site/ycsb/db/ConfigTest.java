@@ -1,7 +1,7 @@
 package site.ycsb.db;
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import site.ycsb.db.config.RedisMDDEClientConfig;
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
 
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
@@ -29,9 +29,9 @@ public class ConfigTest {
         "    password: null\n";
     System.out.println(sampleYAMLConfig);
     final YAMLMapper mapper = new YAMLMapper();
-    RedisMDDEClientConfig config = null;
+    MDDEClientConfiguration config = null;
     try {
-      config = mapper.readValue(sampleYAMLConfig, RedisMDDEClientConfig.class);
+      config = mapper.readValue(sampleYAMLConfig, MDDEClientConfiguration.class);
     } catch (IOException e) {
       System.out.println(e.getMessage());
       e.printStackTrace();

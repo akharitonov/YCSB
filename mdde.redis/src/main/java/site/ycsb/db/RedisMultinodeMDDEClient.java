@@ -1,11 +1,11 @@
 package site.ycsb.db;
 
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
 import redis.clients.jedis.*;
 import site.ycsb.ByteIterator;
 import site.ycsb.DBException;
 import site.ycsb.Status;
 import site.ycsb.StringByteIterator;
-import site.ycsb.db.config.RedisMDDEClientConfig;
 import site.ycsb.db.mdde.IMDDEClient;
 import site.ycsb.db.mdde.MDDEClientTCP;
 
@@ -21,7 +21,7 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
   private IMDDEClient mddeRegistryClient = null;
 
   @Override
-  protected void additionalConfiguration(RedisMDDEClientConfig parsedConfig) throws DBException {
+  protected void additionalConfiguration(MDDEClientConfiguration parsedConfig) throws DBException {
     try {
       mddeRegistryClient = new MDDEClientTCP(parsedConfig.getMddeRegistryHost(), parsedConfig.getMddeRegistryPort());
     } catch (Exception e) {

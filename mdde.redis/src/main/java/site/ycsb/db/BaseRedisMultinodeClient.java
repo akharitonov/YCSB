@@ -3,10 +3,10 @@ package site.ycsb.db;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.DBNetworkNodesConfiguration;
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
 import redis.clients.jedis.*;
 import site.ycsb.*;
-import site.ycsb.db.config.RedisMDDEClientConfig;
-import site.ycsb.db.config.RedisMDDEClientNode;
 
 import java.io.File;
 import java.io.IOException;
@@ -77,14 +77,14 @@ public abstract class BaseRedisMultinodeClient extends DB {
   public void initWithTextConfig(String configText) throws DBException{
     final ObjectMapper mapper = new YAMLMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    RedisMDDEClientConfig config;
+    MDDEClientConfiguration config;
     try {
-      config = mapper.readValue(configText, RedisMDDEClientConfig.class);
+      config = mapper.readValue(configText, MDDEClientConfiguration.class);
     } catch (IOException e) {
       throw new DBException("Unable to parse the config file: " + e.getMessage());
     }
 
-    for (RedisMDDEClientNode node : config.getNodes()){
+    for (DBNetworkNodesConfiguration node : config.getNodes()){
       String host = node.getHost();
       int port = node.getPort();
 
@@ -106,7 +106,7 @@ public abstract class BaseRedisMultinodeClient extends DB {
    * Implement this method to do any additional configuration required for a specific implementation.
    * @param parsedConfig Parsed RedisMDDEClientConfig, not null.
    */
-  protected abstract void additionalConfiguration(RedisMDDEClientConfig parsedConfig) throws DBException;
+  protected abstract void additionalConfiguration(MDDEClientConfiguration parsedConfig) throws DBException;
 
   /**
    * Close all connections to Redis Db instances in the pool.
