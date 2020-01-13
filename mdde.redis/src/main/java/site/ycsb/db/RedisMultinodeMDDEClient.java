@@ -23,7 +23,9 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
   @Override
   protected void additionalConfiguration(MDDEClientConfiguration parsedConfig) throws DBException {
     try {
-      mddeRegistryClient = new MDDEClientTCP(parsedConfig.getMddeRegistryHost(), parsedConfig.getMddeRegistryPort());
+      mddeRegistryClient = new MDDEClientTCP(
+          parsedConfig.getRegistryNetworkConnection().getMddeRegistryHost(),
+          parsedConfig.getRegistryNetworkConnection().getMddeRegistryPort());
     } catch (Exception e) {
       throw new DBException("Failed to create a new MDDE TCP Client", e);
     }

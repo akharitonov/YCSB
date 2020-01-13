@@ -1,5 +1,8 @@
 package site.ycsb.db;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfigurationReader;
 import org.junit.Test;
 import site.ycsb.ByteIterator;
 import site.ycsb.DBException;
@@ -9,13 +12,12 @@ import site.ycsb.StringByteIterator;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.*;
 
 public class ClientBasicTest {
 
@@ -26,7 +28,14 @@ public class ClientBasicTest {
         .parallel().collect(Collectors.joining("\n"));
 
     RedisMultinodeMDDEClient testClient = new RedisMultinodeMDDEClient();
-    testClient.initWithTextConfig(yamlTestConfig);
+    MDDEClientConfigurationReader mddeClientConfigReader = new MDDEClientConfigurationReader();
+    MDDEClientConfiguration configuration = null;
+    try {
+      configuration = mddeClientConfigReader.deserializeConfiguration(yamlTestConfig);
+    } catch (JsonProcessingException e) {
+      fail(e.getMessage());
+    }
+    testClient.initWithMDDEClientConfig(configuration);
     testClient.flush(false);
 
     String key = "k_1";

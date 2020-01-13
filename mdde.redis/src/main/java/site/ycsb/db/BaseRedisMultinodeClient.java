@@ -1,8 +1,5 @@
 package site.ycsb.db;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfigurationReader;
 import dev.jcri.mdde.registry.shared.configuration.DBNetworkNodesConfiguration;
@@ -11,13 +8,10 @@ import site.ycsb.*;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.stream.Stream;
 
 
 /**
@@ -62,7 +56,7 @@ public abstract class BaseRedisMultinodeClient extends DB {
       throw new DBException("Failed to read the config file", e);
     }
 
-    initWithTextConfig(configuration);
+    initWithMDDEClientConfig(configuration);
 
     if(nodesPool.size() == 0) {
       throw new DBException("Data nodes are't specified.");
@@ -74,7 +68,7 @@ public abstract class BaseRedisMultinodeClient extends DB {
    * @param config Parsed MDDE client config file.
    * @throws DBException Error of the configuration.
    */
-  public void initWithTextConfig(MDDEClientConfiguration config) throws DBException{
+  public void initWithMDDEClientConfig(MDDEClientConfiguration config) throws DBException{
     Objects.requireNonNull(config);
     for (DBNetworkNodesConfiguration node : config.getNodes()){
       String host = node.getHost();
