@@ -3,8 +3,9 @@ package site.ycsb.db;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import dev.jcri.mdde.registry.shared.benchmark.ycsb.DBNetworkNodesConfiguration;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfigurationReader;
+import dev.jcri.mdde.registry.shared.configuration.DBNetworkNodesConfiguration;
 import redis.clients.jedis.*;
 import site.ycsb.*;
 
@@ -53,16 +54,15 @@ public abstract class BaseRedisMultinodeClient extends DB {
         (getProperties().getProperty(VERBOSE_P).compareTo("true") == 0)) {
       verbose = true;
     }
-
-    StringBuilder contentBuilder = new StringBuilder();
-    try (Stream<String> stream = Files.lines(Paths.get(configPath), StandardCharsets.UTF_8)){
-      stream.forEach(s -> contentBuilder.append(s).append("\n"));
-    }
-    catch (IOException e){
+    MDDEClientConfigurationReader mddeClientConfigReader = new MDDEClientConfigurationReader();
+    MDDEClientConfiguration configuration = null;
+    try {
+      configuration = mddeClientConfigReader.readConfiguration(Paths.get(configPath));
+    } catch (IOException e) {
       throw new DBException("Failed to read the config file", e);
     }
-    String configText = contentBuilder.toString();
-    initWithTextConfig(configText);
+
+    initWithTextConfig(configuration);
 
     if(nodesPool.size() == 0) {
       throw new DBException("Data nodes are't specified.");
@@ -71,19 +71,11 @@ public abstract class BaseRedisMultinodeClient extends DB {
 
   /**
    * Initialized this instance with the textual configuration.
-   * @param configText String of the YAML config.
+   * @param config Parsed MDDE client config file.
    * @throws DBException Error of the configuration.
    */
-  public void initWithTextConfig(String configText) throws DBException{
-    final ObjectMapper mapper = new YAMLMapper()
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    MDDEClientConfiguration config;
-    try {
-      config = mapper.readValue(configText, MDDEClientConfiguration.class);
-    } catch (IOException e) {
-      throw new DBException("Unable to parse the config file: " + e.getMessage());
-    }
-
+  public void initWithTextConfig(MDDEClientConfiguration config) throws DBException{
+    Objects.requireNonNull(config);
     for (DBNetworkNodesConfiguration node : config.getNodes()){
       String host = node.getHost();
       int port = node.getPort();
@@ -139,6 +131,7 @@ public abstract class BaseRedisMultinodeClient extends DB {
   protected double hash(String key) {
     return key.hashCode();
   }
+  // TODO: Better hash
 
   @Override
   public abstract Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result);
