@@ -1,6 +1,8 @@
 package site.ycsb.db;
 
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
+import dev.jcri.mdde.registry.shared.commands.containers.CommandResultContainer;
+import dev.jcri.mdde.registry.shared.commands.containers.args.WriteArgsInsertContainer;
 import redis.clients.jedis.*;
 import site.ycsb.ByteIterator;
 import site.ycsb.DBException;
@@ -61,12 +63,34 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
    * @return Jedis instance.
    */
   @Override
-  public Jedis getNodeForInsertion() throws DBException {
+  public String getNodeForInsertion() throws DBException {
     // Try to spread incoming insertions more-less uniformly across all nodes.
     Map<String, Long> currentStats = getDBCount();
     Map.Entry<String, Long> minRecordsNode = Collections.min(currentStats.entrySet(),
         Comparator.comparing(Map.Entry<String, Long>::getValue));
-    return nodesPool.get(minRecordsNode.getKey()).getResource();
+    return minRecordsNode.getKey();
+  }
+
+  @Override
+  public Boolean confirmInsertion(String nodeId, String key) {
+    try{
+      WriteArgsInsertContainer cmdArgs = new WriteArgsInsertContainer();
+      cmdArgs.setNodeId(nodeId);
+      cmdArgs.setTupleId(key);
+      CommandResultContainer<String> response = mddeRegistryClient.insertTuple(cmdArgs);
+      if(verbose){
+        System.out.println(String.format("Confirm insertion of Key %s to Node %s. " +
+            "Response: %s", key, nodeId, response.getResult()));
+      }
+
+      if(response.getResult().equals("ok")){
+        return true;
+      }
+    }catch (Exception e){
+      System.err.println(e.getMessage());
+      return false;
+    }
+    return false;
   }
 
   @Override

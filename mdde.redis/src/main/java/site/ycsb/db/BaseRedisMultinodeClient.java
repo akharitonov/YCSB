@@ -71,17 +71,41 @@ public abstract class BaseRedisMultinodeClient extends DB {
   public void initWithMDDEClientConfig(MDDEClientConfiguration config) throws DBException{
     Objects.requireNonNull(config);
     for (DBNetworkNodesConfiguration node : config.getNodes()){
+      if(!node.getDefaultNode()){
+        continue;
+      }
+
       String host = node.getHost();
       int port = node.getPort();
 
       JedisPoolConfig configPool = new JedisPoolConfig();
       JedisPool nodeCPool = null;
+
+      if(verbose){
+        System.out.println(String.format("Configure Redis connection pool:\n\tHost: %s\n\tPort: %d", host, port));
+      }
+
       if (node.getPassword() != null) {
+        if(verbose){
+          System.out.println(String.format("Password is set for Redis connection pool:\n\tHost: %s\n\tPort: %d",
+              host, port));
+        }
         nodeCPool = new JedisPool(configPool, host, port,  2000, new String(node.getPassword()));
       } else {
         nodeCPool = new JedisPool(configPool, host, port,  2000);
       }
+      if(verbose){
+        // Attempt to connect
+        try(Jedis jedis = nodeCPool.getResource()){
+          String pong = jedis.ping();
+          System.out.println(String.format("Redis response to PING: %s", pong));
+        }
+        System.out.println(String.format("Redis Node %s is open: %b", node.getNodeId(), !nodeCPool.isClosed()));
+      }
       nodesPool.put(node.getNodeId(), nodeCPool);
+    }
+    if(verbose){
+      System.out.println(String.format("Nodes added %d", nodesPool.size()));
     }
 
     // Do any additional implementation specific configuration
@@ -102,6 +126,9 @@ public abstract class BaseRedisMultinodeClient extends DB {
   public void cleanup() throws DBException {
     List<Throwable> errors = null;
     for (String poolId : nodesPool.keySet()){
+      if(verbose){
+        System.out.println(String.format("Closing pool for node: %s", poolId));
+      }
       try {
         nodesPool.get(poolId).close();
       } catch (Exception e) {
@@ -138,11 +165,14 @@ public abstract class BaseRedisMultinodeClient extends DB {
   protected Map<String, Long> getDBCount() throws DBException {
     List<Throwable> errors = new CopyOnWriteArrayList<>();
     Map<String, Long> result = new ConcurrentHashMap<>();
-    result.keySet().addAll(nodesPool.keySet());
+    for(String nodeId: nodesPool.keySet()){
+      result.put(nodeId, (long) -1);
+    }
     nodesPool.keySet().parallelStream().forEach(poolId -> {
         try {
-          result.put(poolId, nodesPool.get(poolId).getResource().dbSize());
-          nodesPool.get(poolId).close();
+          try(Jedis jedis = nodesPool.get(poolId).getResource()) {
+            result.put(poolId, jedis.dbSize());
+          }
         } catch (Exception e) {
           errors.add(new DBException(String.format("Failed fetching DBSIZE for node %s.", poolId)));
         }
@@ -157,25 +187,50 @@ public abstract class BaseRedisMultinodeClient extends DB {
    * Select the node for insertion.
    * @return Jedis instance.
    */
-  public abstract Jedis getNodeForInsertion() throws DBException;
+  public abstract String getNodeForInsertion() throws DBException;
+
+  /**
+   * Add the key to MDDE registry or make any other manipulations for post insertion.
+   * If returned false, the inserted record is removed.
+   * @param key Inserted key
+   * @return True - proceed with the insertion. False - roll insertion back
+   */
+  public abstract Boolean confirmInsertion(String nodeId, String key);
 
   @Override
   public Status insert(String table, String key, Map<String, ByteIterator> values) {
-    try(Jedis jedis = getNodeForInsertion()) {
+    String nodeId = null;
+    try {
+      nodeId = getNodeForInsertion();
+    } catch (DBException e) {
+      e.printStackTrace();
+      return Status.ERROR;
+    }
+    if(verbose){
+      System.out.println(String.format("INSERT Key: %s to Pool: %s (Open: %b)",
+          key,
+          nodeId,
+          !nodesPool.get(nodeId).isClosed()));
+    }
+    try(Jedis jedis = nodesPool.get(nodeId).getResource()) {
       Map<String, String> strValuesMap = StringByteIterator.getStringMap(values);
       if(verbose){
         System.out.println(String.format("Inserting key %s, num values: %d", key, values.size()));
       }
       long nSetFields = jedis.hset(key, strValuesMap);
       if (nSetFields == values.size()) {
+        if(!confirmInsertion(nodeId, key)){
+          jedis.del(key);
+          return Status.ERROR;
+        }
         jedis.zadd(INDEX_KEY, hash(key), key);
         return Status.OK;
       } else {
         return Status.ERROR;
       }
-    } catch (DBException e) {
+    } catch (Exception e) {
       if(verbose) {
-        System.err.println(e.getMessage());
+        System.err.println("INSERT ERROR: " + e.getMessage());
         if(e.getCause() != null){
           System.err.println(e.getCause().getMessage());
         }

@@ -29,11 +29,15 @@ public class RedisMultinodeStandaloneClient extends BaseRedisMultinodeClient {
   }
 
   @Override
-  public Jedis getNodeForInsertion(){
+  public String getNodeForInsertion(){
     // Randomly grabbing an instance from the pool of Redis DB nodes
-    Object[] allJedisPools = nodesPool.values().toArray();
-    JedisPool randJedisPool = (JedisPool) allJedisPools[randomNodeGen.nextInt(allJedisPools.length)];
-    return randJedisPool.getResource();
+    Object[] allIds =  nodesPool.keySet().toArray();
+    return (String)allIds[randomNodeGen.nextInt(allIds.length)];
+  }
+
+  @Override
+  public Boolean confirmInsertion(String nodeId, String key) {
+    return true;
   }
 
   @Override

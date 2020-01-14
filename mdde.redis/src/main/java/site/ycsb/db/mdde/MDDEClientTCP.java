@@ -1,6 +1,8 @@
 package site.ycsb.db.mdde;
 
+import dev.jcri.mdde.registry.shared.commands.EWriteCommand;
 import dev.jcri.mdde.registry.shared.commands.containers.CommandResultContainer;
+import dev.jcri.mdde.registry.shared.commands.containers.CommandSerializationHelper;
 import dev.jcri.mdde.registry.shared.commands.containers.args.WriteArgsDeleteTupleContainer;
 import dev.jcri.mdde.registry.shared.commands.containers.args.WriteArgsInsertContainer;
 
@@ -35,8 +37,7 @@ public class MDDEClientTCP implements IMDDEClient {
     out = new DataOutputStream(socket.getOutputStream());
   }
 
-  @Override
-  public String sendCommand(String command) throws IOException {
+  private String sendCommand(String command) throws IOException {
     byte[] message = command.getBytes(StandardCharsets.UTF_8);
     byte[] length = intToByteArray(message.length);
     byte[] bArr = new byte[4 + message.length];
@@ -61,12 +62,16 @@ public class MDDEClientTCP implements IMDDEClient {
         gotFullResponse = true;
       }
     }
-    return new String(responsePayload, StandardCharsets.UTF_8);
+    String payloadStr = new String(responsePayload, StandardCharsets.UTF_8);
+    System.out.println("PAYLOAD:" + payloadStr);
+    return payloadStr;
   }
 
   @Override
-  public CommandResultContainer<String> insertTuple(WriteArgsInsertContainer arguments) {
-    return null;
+  public CommandResultContainer<String> insertTuple(WriteArgsInsertContainer arguments) throws IOException {
+    String serializedCommand = CommandSerializationHelper.serializeJson(EWriteCommand.INSERT_TUPLE, arguments);
+    String response = sendCommand(serializedCommand);
+    return CommandSerializationHelper.deserializeJson(response);
   }
 
   @Override
