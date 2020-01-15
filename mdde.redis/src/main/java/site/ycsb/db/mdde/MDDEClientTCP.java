@@ -62,9 +62,7 @@ public class MDDEClientTCP implements IMDDEClient {
         gotFullResponse = true;
       }
     }
-    String payloadStr = new String(responsePayload, StandardCharsets.UTF_8);
-    System.out.println("PAYLOAD:" + payloadStr);
-    return payloadStr;
+    return new String(responsePayload, StandardCharsets.UTF_8);
   }
 
   @Override

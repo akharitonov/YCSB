@@ -1,5 +1,9 @@
 package site.ycsb.db;
 
+import dev.jcri.mdde.registry.clinet.tcp.benchmark.BenchmarkClient;
+import dev.jcri.mdde.registry.shared.benchmark.IMDDEBenchmarkClient;
+import dev.jcri.mdde.registry.shared.benchmark.commands.LocateTuple;
+import dev.jcri.mdde.registry.shared.benchmark.responses.TupleLocation;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
 import dev.jcri.mdde.registry.shared.commands.containers.CommandResultContainer;
 import dev.jcri.mdde.registry.shared.commands.containers.args.WriteArgsInsertContainer;
@@ -21,6 +25,7 @@ import java.util.*;
 public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
 
   private IMDDEClient mddeRegistryClient = null;
+  private IMDDEBenchmarkClient mddeBenchmarkClient = null;
 
   @Override
   protected void additionalConfiguration(MDDEClientConfiguration parsedConfig) throws DBException {
@@ -31,12 +36,34 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
     } catch (Exception e) {
       throw new DBException("Failed to create a new MDDE TCP Client", e);
     }
+
+    try {
+      mddeBenchmarkClient = new BenchmarkClient(
+          parsedConfig.getRegistryNetworkConnection().getMddeRegistryHost(),
+          parsedConfig.getRegistryNetworkConnection().getMddeRegistryBenchmarkPort());
+      mddeBenchmarkClient.openConnection();
+    } catch (Exception e) {
+      throw new DBException("Failed to create a new MDDE Benchmark TCP Client", e);
+    }
   }
 
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
-    for (Map.Entry<String, JedisPool> entry : nodesPool.entrySet()) {
-      JedisPool pool = entry.getValue();
+    try {
+      TupleLocation location = mddeBenchmarkClient.locateTuple(new LocateTuple(key));
+      if(location == null || !location.tupleExists()){
+        return Status.NOT_FOUND;
+      }
+
+      JedisPool pool = nodesPool.get(location.getNodeId());
+      if(pool == null){
+        if(verbose){
+          System.err.println(
+              String.format("READ ERROR: Unable to locate Redis connection with Id %s", location.getNodeId()));
+        }
+        return Status.ERROR;
+      }
+
       try (Jedis jedis = pool.getResource()) {
         if (fields == null) {
           StringByteIterator.putAllAsByteIterators(result, jedis.hgetAll(key));
@@ -44,15 +71,21 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
           String[] fieldArray = fields.toArray(new String[fields.size()]);
           List<String> values = jedis.hmget(key, fieldArray);
 
-          for(int i = 0; i < fieldArray.length; i++){
+          for (int i = 0; i < fieldArray.length; i++) {
             String iField = fieldArray[i];
             String iVal = values.get(i);
-            if(iVal != null) {
+            if (iVal != null) {
               result.put(iField, new StringByteIterator(iVal));
             }
           }
         }
       }
+
+    } catch (InterruptedException e) {
+      if(verbose){
+        System.err.println(String.format("READ ERROR: %s", e.getMessage()));
+      }
+      return Status.ERROR;
     }
 
     return result.isEmpty() ? Status.NOT_FOUND : Status.OK;
