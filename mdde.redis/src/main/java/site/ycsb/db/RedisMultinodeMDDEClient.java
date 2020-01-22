@@ -1,6 +1,7 @@
 package site.ycsb.db;
 
 import dev.jcri.mdde.registry.clinet.tcp.benchmark.BenchmarkClient;
+import dev.jcri.mdde.registry.server.tcp.Constants;
 import dev.jcri.mdde.registry.shared.benchmark.IMDDEBenchmarkClient;
 import dev.jcri.mdde.registry.shared.benchmark.commands.LocateTuple;
 import dev.jcri.mdde.registry.shared.benchmark.responses.TupleLocation;
@@ -29,18 +30,29 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
 
   @Override
   protected void additionalConfiguration(MDDEClientConfiguration parsedConfig) throws DBException {
+    // TODO: Better way of supplying config specifics to the client
+    String host = parsedConfig.getRegistryNetworkConnection()
+        .get(Constants.HOST_FIELD);
+    String portString  = parsedConfig.getRegistryNetworkConnection()
+        .get(Constants.PORT_CONTROL_FILED);
+    int port = Integer.parseInt(portString);
+    String benchPortString =parsedConfig.getRegistryNetworkConnection()
+        .get(Constants.PORT_BENCHMARK_FIELD);
+    int benchPort = Integer.parseInt(benchPortString);
+
     try {
+
       mddeRegistryClient = new MDDEClientTCP(
-          parsedConfig.getRegistryNetworkConnection().getMddeRegistryHost(),
-          parsedConfig.getRegistryNetworkConnection().getMddeRegistryPort());
+          host,
+          port);
     } catch (Exception e) {
       throw new DBException("Failed to create a new MDDE TCP Client", e);
     }
 
     try {
       mddeBenchmarkClient = new BenchmarkClient(
-          parsedConfig.getRegistryNetworkConnection().getMddeRegistryHost(),
-          parsedConfig.getRegistryNetworkConnection().getMddeRegistryBenchmarkPort());
+          host,
+          benchPort);
       mddeBenchmarkClient.openConnection();
     } catch (Exception e) {
       throw new DBException("Failed to create a new MDDE Benchmark TCP Client", e);
