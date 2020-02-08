@@ -4,6 +4,7 @@ import dev.jcri.mdde.registry.clinet.tcp.benchmark.BenchmarkClient;
 import dev.jcri.mdde.registry.server.tcp.Constants;
 import dev.jcri.mdde.registry.shared.benchmark.IMDDEBenchmarkClient;
 import dev.jcri.mdde.registry.shared.benchmark.commands.LocateTuple;
+import dev.jcri.mdde.registry.shared.benchmark.commands.ReleaseCapacity;
 import dev.jcri.mdde.registry.shared.benchmark.responses.TupleLocation;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
 import dev.jcri.mdde.registry.shared.commands.containers.CommandResultContainer;
@@ -61,8 +62,9 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
 
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
+    TupleLocation location = null;
     try {
-      TupleLocation location = mddeBenchmarkClient.locateTuple(new LocateTuple(key));
+      location = mddeBenchmarkClient.locateTuple(new LocateTuple(key));
       if(location == null || !location.tupleExists()){
         return Status.NOT_FOUND;
       }
@@ -92,12 +94,21 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
           }
         }
       }
-
     } catch (InterruptedException e) {
       if(verbose){
         System.err.println(String.format("READ ERROR: %s", e.getMessage()));
       }
       return Status.ERROR;
+    }
+    finally {
+      try{
+        if(location != null){
+          mddeBenchmarkClient.releaseCapacity(new ReleaseCapacity(location.getNodeId()));
+        }
+      }
+      catch (Exception ex){
+        System.err.println(ex.getMessage());
+      }
     }
 
     return result.isEmpty() ? Status.NOT_FOUND : Status.OK;
