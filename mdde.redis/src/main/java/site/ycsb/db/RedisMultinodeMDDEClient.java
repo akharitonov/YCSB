@@ -99,14 +99,12 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
         System.err.println(String.format("READ ERROR: %s", e.getMessage()));
       }
       return Status.ERROR;
-    }
-    finally {
-      try{
+    } finally {
+      try {
         if(location != null){
           mddeBenchmarkClient.releaseCapacity(new ReleaseCapacity(location.getNodeId()));
         }
-      }
-      catch (Exception ex){
+      } catch (Exception ex){
         System.err.println(ex.getMessage());
       }
     }
@@ -133,20 +131,19 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
       WriteArgsInsertContainer cmdArgs = new WriteArgsInsertContainer();
       cmdArgs.setNodeId(nodeId);
       cmdArgs.setTupleId(key);
-      CommandResultContainer<String> response = mddeRegistryClient.insertTuple(cmdArgs);
+      CommandResultContainer<Boolean> response = mddeRegistryClient.insertTuple(cmdArgs);
       if(verbose){
         System.out.println(String.format("Confirm insertion of Key %s to Node %s. " +
-            "Response: %s", key, nodeId, response.getResult()));
+            "Response: %b", key, nodeId, response.getResult()));
       }
-
-      if(response.getResult().equals("ok")){
-        return true;
-      }
+      return response.getResult();
     }catch (Exception e){
-      System.err.println(e.getMessage());
+      System.err.println("confirmInsertion error:" + e.getMessage());
+      if(verbose){
+        e.printStackTrace();
+      }
       return false;
     }
-    return false;
   }
 
   @Override

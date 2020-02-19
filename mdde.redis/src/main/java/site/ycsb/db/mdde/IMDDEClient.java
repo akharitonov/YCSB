@@ -15,12 +15,12 @@ public interface IMDDEClient extends AutoCloseable {
    * @param arguments
    * @return
    */
-  CommandResultContainer<String> insertTuple(WriteArgsInsertContainer arguments) throws IOException;
+  CommandResultContainer<Boolean> insertTuple(WriteArgsInsertContainer arguments) throws IOException;
 
   /**
    * Delete tuple from the registry.
    * @param arguments
    * @return
    */
-  CommandResultContainer<String> deleteTuple(WriteArgsDeleteTupleContainer arguments);
+  CommandResultContainer<Boolean> deleteTuple(WriteArgsDeleteTupleContainer arguments);
 }

@@ -221,10 +221,9 @@ public abstract class BaseRedisMultinodeClient extends DB {
       if (nSetFields == values.size()) {
         if(!confirmInsertion(nodeId, key)){
           if(verbose){
-            System.out.println(String.format("INSERT Key: %s to Pool: %s is NOT confirmed. Rolling back",
+            System.out.println(String.format("INSERT key: %s to pool: %s is NOT confirmed. Rolling back",
                 key,
-                nodeId,
-                !nodesPool.get(nodeId).isClosed()));
+                nodeId));
           }
           jedis.del(key);
           return Status.ERROR;

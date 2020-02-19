@@ -66,14 +66,14 @@ public class MDDEClientTCP implements IMDDEClient {
   }
 
   @Override
-  public CommandResultContainer<String> insertTuple(WriteArgsInsertContainer arguments) throws IOException {
+  public CommandResultContainer<Boolean> insertTuple(WriteArgsInsertContainer arguments) throws IOException {
     String serializedCommand = CommandSerializationHelper.serializeJson(EWriteCommand.INSERT_TUPLE, arguments);
     String response = sendCommand(serializedCommand);
-    return CommandSerializationHelper.deserializeJson(response);
+    return CommandSerializationHelper.deserializeJson(Boolean.class, response);
   }
 
   @Override
-  public CommandResultContainer<String> deleteTuple(WriteArgsDeleteTupleContainer arguments) {
+  public CommandResultContainer<Boolean> deleteTuple(WriteArgsDeleteTupleContainer arguments) {
     return null;
   }
 
