@@ -34,12 +34,12 @@ LICENSE file.
     <dependency>
       <groupId>dev.jcri.mdde.registry</groupId>
       <artifactId>mdde-registry-shared</artifactId>
-      <version>0.1-SNAPSHOT</version>
+      <version>0.5.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>dev.jcri.mdde.registry</groupId>
       <artifactId>mdde-registry-tcp-shared</artifactId>
-      <version>0.1-SNAPSHOT</version>
+      <version>0.5.0-SNAPSHOT</version>
     </dependency>
 
     <dependency>

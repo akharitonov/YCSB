@@ -42,6 +42,7 @@ public class RedisMultinodeStandaloneClient extends BaseRedisMultinodeClient {
 
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
+    String node = null;
     for (Map.Entry<String, JedisPool> entry : nodesPool.entrySet()) {
       JedisPool pool = entry.getValue();
       try (Jedis jedis = pool.getResource()) {
@@ -60,9 +61,14 @@ public class RedisMultinodeStandaloneClient extends BaseRedisMultinodeClient {
           }
         }
       }
+      if(!result.isEmpty()){
+        node = entry.getKey();
+        break;
+      }
     }
-
-    return result.isEmpty() ? Status.NOT_FOUND : Status.OK;
+    boolean success = result.isEmpty();
+    notifyRead(node != null? node : "not_found", key, success);
+    return success ? Status.NOT_FOUND : Status.OK;
   }
 
   @Override

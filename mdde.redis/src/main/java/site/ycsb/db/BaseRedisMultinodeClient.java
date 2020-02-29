@@ -2,6 +2,9 @@ package site.ycsb.db;
 
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfigurationReader;
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.cli.EMddeArgs;
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.stats.ClientStatsWriterFactory;
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.stats.IClientStatsWriter;
 import dev.jcri.mdde.registry.shared.configuration.DBNetworkNodesConfiguration;
 import redis.clients.jedis.*;
 import site.ycsb.*;
@@ -31,19 +34,47 @@ public abstract class BaseRedisMultinodeClient extends DB {
   /**
    * Property flag containing path to the YAML config.
    */
-  private static final String CONFIG_PATH = "mdde.redis.configfile";
+  private static final String CONFIG_PATH = EMddeArgs.CONFIG_FILE.toString();
+  /**
+   * Selected stats collector (if any).
+   */
+  private static final String STATS_COLLECTOR = EMddeArgs.CONFIG_FILE.toString();
   private static final String VERBOSE_P = "verbose";
   public static final String INDEX_KEY = "_indices";
 
+  private String clientId = null;
+  private IClientStatsWriter statsWriter = null;
+
   public void init() throws DBException {
+    clientId = UUID.randomUUID().toString().replace("-", "");
     Properties props = getProperties();
+    // Config
     final String configPath = props.getProperty(CONFIG_PATH);
     File configFile = new File(configPath);
     if(!configFile.exists() || configFile.isDirectory()){
       // Somehow inappropriate exception but the one imposed by the superclass
       throw new DBException("Unable to find the configuration file provided " + configPath);
     }
-
+    // Stats collector
+    final String statsCollector = props.getProperty(STATS_COLLECTOR);
+    if(statsCollector != null){
+      Map<String, String> strProps = new HashMap<>();
+      // Retrieve string properties
+      for (Map.Entry<Object, Object> objectObjectEntry : props.entrySet()) {
+        Map.Entry<Object, Object> entry = (Map.Entry) objectObjectEntry;
+        Object k = entry.getKey();
+        Object v = entry.getValue();
+        if (k instanceof String && v instanceof String) {
+          strProps.put((String) k, (String) v);
+        }
+      }
+      try {
+        statsWriter = ClientStatsWriterFactory.getStatsWriterInstance(statsCollector, clientId, strProps);
+      } catch (IOException e) {
+        throw new DBException("Unable to get stats collector", e);
+      }
+    }
+    // Verbosity
     if ((getProperties().getProperty(VERBOSE_P) != null) &&
         (getProperties().getProperty(VERBOSE_P).compareTo("true") == 0)) {
       verbose = true;
@@ -70,6 +101,7 @@ public abstract class BaseRedisMultinodeClient extends DB {
    */
   public void initWithMDDEClientConfig(MDDEClientConfiguration config) throws DBException{
     Objects.requireNonNull(config);
+    // Data nodes
     for (DBNetworkNodesConfiguration node : config.getNodes()){
       if(!node.getDefaultNode()){
         continue;
@@ -110,6 +142,19 @@ public abstract class BaseRedisMultinodeClient extends DB {
 
     // Do any additional implementation specific configuration
     additionalConfiguration(config);
+  }
+
+  /**
+   * Notify the statistics collector about the read operation that was performed.
+   * @param nodeId Node ID from where the tuple was read.
+   * @param tupleId Tuple ID that was retrieved.
+   * @param success True - if there was no error during retrieval.
+   */
+  protected final void notifyRead(String nodeId, String tupleId, boolean success){
+    if(statsWriter == null){
+      return;
+    }
+    statsWriter.addReadToLog(nodeId, tupleId, success);
   }
 
   /**
@@ -154,6 +199,14 @@ public abstract class BaseRedisMultinodeClient extends DB {
   }
   // TODO: Better hash
 
+  /**
+   * Read a single tuple.
+   * @param table The name of the table.
+   * @param key The record key of the record to read.
+   * @param fields The list of fields to read, or null for all of them.
+   * @param result A HashMap of field/value pairs for the result.
+   * @return YCSB status.
+   */
   @Override
   public abstract Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result);
 
