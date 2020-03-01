@@ -38,7 +38,7 @@ public abstract class BaseRedisMultinodeClient extends DB {
   /**
    * Selected stats collector (if any).
    */
-  private static final String STATS_COLLECTOR = EMddeArgs.CONFIG_FILE.toString();
+  private static final String STATS_COLLECTOR = EMddeArgs.STATS_COLLECTOR.toString();
   private static final String VERBOSE_P = "verbose";
   public static final String INDEX_KEY = "_indices";
 
