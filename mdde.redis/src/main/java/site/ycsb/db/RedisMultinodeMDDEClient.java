@@ -108,9 +108,9 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
         System.err.println(ex.getMessage());
       }
     }
-    boolean success = result.isEmpty();
-    notifyRead(location.getNodeId(), key, success);
-    return success ? Status.NOT_FOUND : Status.OK;
+    boolean notFound = result.isEmpty();
+    notifyRead(location.getNodeId(), key, !notFound);
+    return notFound ? Status.NOT_FOUND : Status.OK;
   }
 
   /**

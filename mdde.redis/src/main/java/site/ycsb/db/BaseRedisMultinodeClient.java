@@ -183,6 +183,17 @@ public abstract class BaseRedisMultinodeClient extends DB {
         errors.add(new DBException(String.format("Closing connection failed for node %s.", poolId)));
       }
     }
+
+    if(statsWriter != null){
+      try {
+        statsWriter.close();
+      } catch (IOException e) {
+        if(errors == null){
+          errors = new LinkedList<>();
+        }
+        errors.add(new DBException("Failed to close the stats writer", e));
+      }
+    }
     if(errors != null){
       throw new DBExceptionMDDEAggregate(errors);
     }

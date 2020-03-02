@@ -66,9 +66,9 @@ public class RedisMultinodeStandaloneClient extends BaseRedisMultinodeClient {
         break;
       }
     }
-    boolean success = result.isEmpty();
-    notifyRead(node != null? node : "not_found", key, success);
-    return success ? Status.NOT_FOUND : Status.OK;
+    boolean notFound = result.isEmpty();
+    notifyRead(node != null? node : "not_found", key, !notFound);
+    return notFound ? Status.NOT_FOUND : Status.OK;
   }
 
   @Override
