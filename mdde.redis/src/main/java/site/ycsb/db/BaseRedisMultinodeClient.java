@@ -3,11 +3,13 @@ package site.ycsb.db;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfiguration;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.MDDEClientConfigurationReader;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.cli.EMddeArgs;
+import dev.jcri.mdde.registry.shared.benchmark.ycsb.cli.EYCSBInsertOrder;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.stats.ClientStatsWriterFactory;
 import dev.jcri.mdde.registry.shared.benchmark.ycsb.stats.IClientStatsWriter;
 import dev.jcri.mdde.registry.shared.configuration.DBNetworkNodesConfiguration;
 import redis.clients.jedis.*;
 import site.ycsb.*;
+import site.ycsb.Client;
 
 import java.io.File;
 import java.io.IOException;
@@ -22,6 +24,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * built-in Redis DB clusters. Instead we supply our own distribution control and retrieval logic.
  */
 public abstract class BaseRedisMultinodeClient extends DB {
+  /**
+   * Nodes in order as specified in the passed configuration.
+   */
+  protected List<String> orderedNodeIds = null;
   /**
    * Pool of RedisDB connected nodes.
    */
@@ -45,11 +51,29 @@ public abstract class BaseRedisMultinodeClient extends DB {
   private String clientId = null;
   private IClientStatsWriter statsWriter = null;
 
+  /**
+   * Total number of records to be inserted initially.
+   */
+  protected int totalRecordCount = 0;
+
+  /**
+   * Order of insertions.
+   */
+  protected EYCSBInsertOrder insertOrder = EYCSBInsertOrder.UNIFORM;
+
+  /**
+   * Counter of the insertions suitable when insertions are performed in one thread so there is no need to ask the DB
+   * nodes how many records they already have present.
+   */
+  protected Map<String, Integer> localInsertionCounter = null;
+
   public void init() throws DBException {
     clientId = UUID.randomUUID().toString().replace("-", "");
     Properties props = getProperties();
     // Config
     final String configPath = props.getProperty(CONFIG_PATH);
+    // Get total record count (suitable for read-only benchmarks only)
+    totalRecordCount = Integer.parseInt(props.getProperty(Client.RECORD_COUNT_PROPERTY, Client.DEFAULT_RECORD_COUNT));
     File configFile = new File(configPath);
     if(!configFile.exists() || configFile.isDirectory()){
       // Somehow inappropriate exception but the one imposed by the superclass
@@ -79,6 +103,15 @@ public abstract class BaseRedisMultinodeClient extends DB {
         (getProperties().getProperty(VERBOSE_P).compareTo("true") == 0)) {
       verbose = true;
     }
+    // Insertion scheme
+    if (getProperties().getProperty(EMddeArgs.INSERT_SCHEME.toString()) != null) {
+      insertOrder = EYCSBInsertOrder.get(getProperties().getProperty(EMddeArgs.INSERT_SCHEME.toString()));
+      if (insertOrder == null) {
+        throw new DBException(String.format("Specified non existing Insertion scheme key: '%s'",
+            getProperties().getProperty(EMddeArgs.INSERT_SCHEME.toString())));
+      }
+    }
+    // ..
     MDDEClientConfigurationReader mddeClientConfigReader = new MDDEClientConfigurationReader();
     MDDEClientConfiguration configuration = null;
     try {
@@ -102,7 +135,10 @@ public abstract class BaseRedisMultinodeClient extends DB {
   public void initWithMDDEClientConfig(MDDEClientConfiguration config) throws DBException{
     Objects.requireNonNull(config);
     // Data nodes
+    List<String> tmpOrderedNodeIdList = new ArrayList<>();
     for (DBNetworkNodesConfiguration node : config.getNodes()){
+      tmpOrderedNodeIdList.add(node.getNodeId());
+
       if(!node.getDefaultNode()){
         continue;
       }
@@ -140,6 +176,16 @@ public abstract class BaseRedisMultinodeClient extends DB {
       System.out.println(String.format("Nodes added %d", nodesPool.size()));
     }
 
+    orderedNodeIds = Collections.unmodifiableList(tmpOrderedNodeIdList);
+
+    // Insertion support
+    if (insertOrder == EYCSBInsertOrder.SEQUENTIAL) {
+      localInsertionCounter = new HashMap<>();
+      // Initialize local insertions counter
+      for(String nodeId: nodesPool.keySet()){
+        localInsertionCounter.put(nodeId, 0);
+      }
+    }
     // Do any additional implementation specific configuration
     additionalConfiguration(config);
   }

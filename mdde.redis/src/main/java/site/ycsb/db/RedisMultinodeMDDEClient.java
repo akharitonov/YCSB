@@ -119,15 +119,37 @@ public class RedisMultinodeMDDEClient extends BaseRedisMultinodeClient {
    */
   @Override
   public String getNodeForInsertion() throws DBException {
-    // Try to spread incoming insertions more-less uniformly across all nodes.
-    Map<String, Long> currentStats = getDBCount();
-    Map.Entry<String, Long> minRecordsNode = Collections.min(currentStats.entrySet(),
-        Comparator.comparing(Map.Entry<String, Long>::getValue));
-    return minRecordsNode.getKey();
+    String chosenNode = null;
+    switch (insertOrder){
+    case UNIFORM:
+      Map<String, Long> currentStats = getDBCount();
+      Map.Entry<String, Long> minRecordsNode = Collections.min(currentStats.entrySet(),
+          Comparator.comparing(Map.Entry<String, Long>::getValue));
+      chosenNode =  minRecordsNode.getKey();
+      break;
+    case SEQUENTIAL:
+      long recordCap = totalRecordCount / orderedNodeIds.size();
+      for (String nodeId: orderedNodeIds){
+        // Select next non-full node. If all are full and the division is no even, the last node will have 1 more
+        // record over the recordCap limit.
+        chosenNode = nodeId;
+        if(localInsertionCounter.get(chosenNode) < recordCap){
+          break;
+        }
+      }
+      break;
+    default:
+      throw new DBException("Unknown insertion order");
+    }
+
+    return chosenNode;
   }
 
   @Override
   public Boolean confirmInsertion(String nodeId, String key) {
+    if(localInsertionCounter != null){
+      localInsertionCounter.put(nodeId, localInsertionCounter.get(nodeId) + 1);
+    }
     try{
       WriteArgsInsertContainer cmdArgs = new WriteArgsInsertContainer();
       cmdArgs.setNodeId(nodeId);
